@@ -1,0 +1,196 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/* =========================
+   THEME (FROM YOUR PALETTE)
+========================= */
+@theme {
+  --font-headline: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #006d43;
+  --color-primary-light: #00d084;
+  --color-midnight: #111c2d;
+
+  --color-surface: #f9f9ff;
+  --color-surface-low: #f0f3ff;
+  --color-surface-lowest: #ffffff;
+
+  --color-on-surface-variant: #3c4a40;
+
+  --color-emerald-container: #002111;
+  --color-emerald-on-container: #59fead;
+}
+
+/* =========================
+   ROOT VARIABLES (MAPPED)
+========================= */
+:root {
+  /* Typography */
+  --sans: var(--font-body);
+  --heading: var(--font-headline);
+  --mono: ui-monospace, Consolas, monospace;
+
+  /* Colors mapped from your palette */
+  --text: var(--color-on-surface-variant);
+  --text: var(--color-midnight);
+  --text-muted: var(--color-on-surface-variant);
+
+  --bg: var(--color-surface);
+  --border: var(--color-surface-low);
+
+  --code-bg: var(--color-surface-low);
+
+  /* Accent → use emerald system */
+  --accent: var(--color-primary);
+  --accent-bg: rgba(0, 208, 132, 0.12);
+  --accent-border: rgba(0, 208, 132, 0.4);
+
+  --social-bg: rgba(240, 243, 255, 0.6);
+
+  --shadow:
+    rgba(0, 0, 0, 0.1) 0 10px 15px -3px,
+    rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  font-family: var(--font-body);
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  background-color: var(--bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+/* =========================
+   DARK MODE (ADAPTED)
+========================= */
+@media (prefers-color-scheme: light) {
+  :root {
+    --text: #a7b3a9;
+    --text-h: #ffffff;
+
+    --bg: #0b1410;
+    --border: #1a2a22;
+    --code-bg: #112019;
+
+    --accent: var(--color-primary-light);
+    --accent-bg: rgba(0, 208, 132, 0.15);
+    --accent-border: rgba(0, 208, 132, 0.5);
+
+    --social-bg: rgba(0, 33, 17, 0.6);
+
+    --shadow:
+      rgba(0, 0, 0, 0.4) 0 10px 15px -3px,
+      rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  }
+
+  #social .button-icon {
+    filter: invert(1) brightness(2);
+  }
+}
+
+/* =========================
+   BASE LAYER (TAILWIND)
+========================= */
+@layer base {
+  body {
+    @apply bg-surface font-body text-midnight antialiased;
+    margin: 0;
+  }
+}
+
+/* =========================
+   LAYOUT
+========================= */
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  border-inline: 1px solid var(--border);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* =========================
+   TYPOGRAPHY
+========================= */
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+
+p {
+  margin: 0;
+}
+
+/* =========================
+   CODE BLOCKS
+========================= */
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
+
+/* =========================
+   UTILITIES (FROM YOUR THEME)
+========================= */
+@layer utilities {
+  .emerald-gradient {
+    background: linear-gradient(135deg, #006d43 0%, #00d084 100%);
+  }
+
+  .glass-header {
+    background-color: rgba(249, 249, 255, 0.7);
+    backdrop-filter: blur(20px);
+  }
+
+  .hero-mask {
+    -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  }
+}
