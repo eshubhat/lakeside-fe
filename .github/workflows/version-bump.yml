@@ -1,0 +1,42 @@
+name: Auto Frontend Version Increment
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure Git Author
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump Version (+0.0.1)
+        run: npm version patch --no-git-tag-version
+
+      - name: Commit and Push Version Upgrades
+        run: |
+          git add package.json package-lock.json || true
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: auto-increment package version [skip ci]"
+          git push origin HEAD:${{ github.ref }}
