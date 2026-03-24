@@ -12,8 +12,13 @@ import {
     Send
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 export default function App() {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
+
     return (
         <div className="min-h-screen">
             {/* Navigation */}
@@ -27,10 +32,21 @@ export default function App() {
                         <a className="text-on-surface-variant font-medium transition-colors hover:text-primary text-sm" href="#">Resources</a>
                     </nav>
                     <div className="flex items-center gap-4">
-                        <button className="hidden md:block text-midnight font-semibold text-sm px-4 py-2 hover:text-primary transition-colors">Sign In</button>
-                        <button className="emerald-gradient text-white font-bold text-sm px-6 py-2.5 rounded-lg active:scale-95 transition-all shadow-lg shadow-primary/20">
-                            Start Building
-                        </button>
+                        {user ? (
+                            <>
+                                <button onClick={logout} className="hidden md:block text-midnight font-semibold text-sm px-4 py-2 hover:text-red-500 transition-colors">Sign Out</button>
+                                <button onClick={() => navigate('/room')} className="emerald-gradient text-white font-bold text-sm px-6 py-2.5 rounded-lg active:scale-95 transition-all shadow-lg shadow-primary/20">
+                                    Go to Studio
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <Link to="/login" className="hidden md:block text-midnight font-semibold text-sm px-4 py-2 hover:text-primary transition-colors">Sign In</Link>
+                                <Link to="/signup" className="emerald-gradient flex items-baseline text-white font-bold text-sm px-6 py-2.5 rounded-lg active:scale-95 transition-all shadow-lg shadow-primary/20">
+                                    Start Building
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </header>
@@ -55,10 +71,17 @@ export default function App() {
                                 Record studio-quality podcasts and video interviews from anywhere. Local recording ensures 4K video and crystal-clear audio, even with poor internet.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <button className="emerald-gradient text-white font-bold px-8 py-4 rounded-xl text-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all">
-                                    Get Started Free
-                                    <ArrowRight className="w-5 h-5" />
-                                </button>
+                                {user ? (
+                                    <button onClick={() => navigate('/room')} className="emerald-gradient text-white font-bold px-8 py-4 rounded-xl text-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/20">
+                                        Open Your Studio
+                                        <ArrowRight className="w-5 h-5" />
+                                    </button>
+                                ) : (
+                                    <button onClick={() => navigate('/signup')} className="emerald-gradient text-white font-bold px-8 py-4 rounded-xl text-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/20">
+                                        Get Started Free
+                                        <ArrowRight className="w-5 h-5" />
+                                    </button>
+                                )}
                                 <button className="bg-white border border-midnight/10 text-midnight font-bold px-8 py-4 rounded-xl text-lg flex items-center justify-center gap-2 hover:bg-surface-low transition-all">
                                     <PlayCircle className="w-5 h-5" />
                                     See How it Works
@@ -233,9 +256,15 @@ export default function App() {
                             Join thousands of creators who trust ArchitectSaaS for their most important conversations.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-6 justify-center">
-                            <button className="emerald-gradient text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl shadow-primary/30 hover:scale-105 transition-transform">
-                                Start Your Free Trial
-                            </button>
+                            {user ? (
+                                <button onClick={() => navigate('/room')} className="emerald-gradient text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl shadow-primary/30 hover:scale-105 transition-transform">
+                                    Go to Studio
+                                </button>
+                            ) : (
+                                <button onClick={() => navigate('/signup')} className="emerald-gradient text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl shadow-primary/30 hover:scale-105 transition-transform">
+                                    Start Your Free Trial
+                                </button>
+                            )}
                             <button className="bg-surface-low text-midnight font-bold px-10 py-5 rounded-xl text-xl hover:bg-white border border-midnight/5 transition-colors">
                                 Book a Demo
                             </button>

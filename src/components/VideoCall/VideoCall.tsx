@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useWebRTC } from '../../hooks/useWebRTC';
 import { Copy, Video } from 'lucide-react';
 
@@ -79,14 +80,15 @@ export const VideoCall: React.FC = () => {
   }, [roomId, navigate]);
 
   const activeRoomId = roomId || 'default-room';
+  const { user, token } = useAuth();
 
-  // Hook handles connection for a particular room dynamically
+  // Hook handles connection for a particular room dynamically securely passing credentials bounded into JWT verification
   const {
     localStream,
     remoteStreams,
     initialize,
     endCall,
-  } = useWebRTC(SIGNALING_URL, activeRoomId);
+  } = useWebRTC(SIGNALING_URL, activeRoomId, token, user);
 
   // --- Recording Logic ---
   const [isRecording, setIsRecording] = useState(false);

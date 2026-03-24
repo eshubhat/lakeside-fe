@@ -5,7 +5,7 @@ export interface SignalMessage {
   payload?: any;
 }
 
-export const useWebRTC = (signalingUrl: string, roomId: string) => {
+export const useWebRTC = (signalingUrl: string, roomId: string, token: string | null, user: any) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   
@@ -115,7 +115,8 @@ export const useWebRTC = (signalingUrl: string, roomId: string) => {
       ws.current = null;
     }
 
-    ws.current = new WebSocket(signalingUrl);
+    const secureUrl = token ? `${signalingUrl}?token=${token}` : signalingUrl;
+    ws.current = new WebSocket(secureUrl);
 
     ws.current.onopen = () => {
       console.log('WebSocket network tunnel successful');
@@ -123,8 +124,8 @@ export const useWebRTC = (signalingUrl: string, roomId: string) => {
       // Reset exponential backoff constraints back to 0 so the next fail acts quickly
       reconnectAttemptRef.current = 0; 
       
-      // Promptly re-register to the active URL parameter room to preserve multi-party state
-      ws.current?.send(JSON.stringify({ type: 'join', payload: { roomId } }));
+      // Re-register to the active room natively passing explicit user signatures
+      ws.current?.send(JSON.stringify({ type: 'join', payload: { roomId, user } }));
     };
 
     ws.current.onclose = () => {
