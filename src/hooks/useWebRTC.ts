@@ -5,94 +5,144 @@ export interface SignalMessage {
   payload?: any;
 }
 
+const ICE_SERVERS: RTCIceServer[] = [
+  // ✅ Google STUN (fast direct connection)
+  { urls: 'stun:stun.l.google.com:19302' },
+
+  // ✅ Metered TURN (fallback relay)
+  ...(import.meta.env.VITE_TURN_URL
+    ? [
+      {
+        urls: [
+          import.meta.env.VITE_TURN_URL,              // udp
+          import.meta.env.VITE_TURN_URL_TCP || '',    // tcp fallback
+        ].filter(Boolean),
+        username: import.meta.env.VITE_TURN_USERNAME,
+        credential: import.meta.env.VITE_TURN_CREDENTIAL,
+      },
+    ]
+    : []),
+];
+
 export const useWebRTC = (signalingUrl: string, roomId: string, token: string | null, user: any) => {
+  // previewStream — low quality, sent over WebRTC to peers (shown in VideoPlayer tiles)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // recordingStream — full quality, used only by MediaRecorder in VideoCall.tsx, never sent over the network
+  const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-  
+
   const myIdRef = useRef<string | null>(null);
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
+  // Queue ICE candidates that arrive before remote description is set
+  const iceCandidateQueues = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const ws = useRef<WebSocket | null>(null);
-  
-  // Reconnect state bounds
+  const localStreamRef = useRef<MediaStream | null>(null);       // stable ref for preview stream cleanup
+  const recordingStreamRef = useRef<MediaStream | null>(null);   // stable ref for recording stream cleanup
+
   const reconnectAttemptRef = useRef(0);
-  const maxReconnectAttempts = 7; // Times out fully after approx ~2+ minutes total wait time 
+  const maxReconnectAttempts = 7;
 
   const startMedia = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: {
-          width: { ideal: 3840 },
-          height: { ideal: 2160 }
-        }, 
-        audio: true 
+      // 1. HIGH QUALITY — local recording only, never transmitted over WebRTC
+      const highQualityStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
+        audio: true,
       });
-      
-      const videoTrack = stream.getVideoTracks()[0];
+
+      const videoTrack = highQualityStream.getVideoTracks()[0];
       if (videoTrack) {
         const settings = videoTrack.getSettings();
-        console.log(`[WebRTC] Actual video resolution captured: ${settings.width}x${settings.height}`);
+        console.log(`[WebRTC] Recording resolution: ${settings.width}x${settings.height}`);
       }
-      
-      setLocalStream(stream);
-      return stream;
+
+      recordingStreamRef.current = highQualityStream;
+      setRecordingStream(highQualityStream);
+
+      // 2. LOW QUALITY — transmitted to peers via WebRTC, shown in video tiles
+      //    720p at 30fps is plenty for a live preview feed (Riverside uses similar)
+      const previewStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+        audio: true,
+      });
+
+      // Cap the WebRTC video encoding to 1.5 Mbps so TURN bandwidth stays low
+      // This is applied per-sender after peer connections are created (see createPeerConnection)
+      console.log(`[WebRTC] Preview stream ready for transmission`);
+
+      localStreamRef.current = previewStream;
+      setLocalStream(previewStream);
+
+      return previewStream; // Only the preview stream is passed into WebRTC peer connections
     } catch (error) {
-      console.error('Error accessing media devices.', error);
+      console.error('[WebRTC] Error accessing media devices.', error);
       throw error;
     }
   }, []);
 
-  const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { 
-          urls: 'stun:stun.l.google.com:19302' 
-        },
-        {
-          urls: 'turn:your-turn-server.com:3478',
-          username: 'placeholder-username',
-          credential: 'placeholder-password'
-        }
-      ],
-    });
+  /** Drain any queued ICE candidates for a peer after remote description is set. */
+  const drainIceCandidates = useCallback(async (peerId: string, pc: RTCPeerConnection) => {
+    const queued = iceCandidateQueues.current.get(peerId) ?? [];
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (e) {
+        console.error(`[WebRTC] Failed to add queued ICE candidate for ${peerId}:`, e);
+      }
+    }
+    iceCandidateQueues.current.delete(peerId);
+  }, []);
 
-    // Add local media tracks
+  const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-    // Handle inbound streams
     pc.ontrack = (event) => {
-      console.log(`Received remote track from ${peerId}`);
-      if (event.streams && event.streams[0]) {
-        setRemoteStreams((prev) => ({
-          ...prev,
-          [peerId]: event.streams[0],
-        }));
-      } else {
-        const inboundStream = new MediaStream();
-        inboundStream.addTrack(event.track);
-        setRemoteStreams((prev) => ({
-          ...prev,
-          [peerId]: inboundStream,
-        }));
-      }
+      console.log(`[WebRTC] Received remote track from ${peerId}`);
+      const inboundStream = event.streams?.[0] ?? (() => {
+        const s = new MediaStream();
+        s.addTrack(event.track);
+        return s;
+      })();
+      setRemoteStreams((prev) => ({ ...prev, [peerId]: inboundStream }));
     };
 
-    // Forward ICE Candidates targeted at `peerId`
     pc.onicecandidate = (event) => {
       if (event.candidate && ws.current?.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({
           type: 'ice-candidate',
-          payload: { 
-            targetId: peerId, 
-            senderId: myIdRef.current, 
-            candidate: event.candidate 
-          },
+          payload: { targetId: peerId, senderId: myIdRef.current, candidate: event.candidate },
         }));
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Peer ${peerId} connection state: ${pc.connectionState}`);
+      if (pc.connectionState === 'connected') {
+        // Cap video encoding to 1.5 Mbps — keeps TURN relay bandwidth low for preview stream
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (videoSender) {
+          const params = videoSender.getParameters();
+          if (params.encodings?.length) {
+            params.encodings[0].maxBitrate = 1_500_000;
+          } else {
+            params.encodings = [{ maxBitrate: 1_500_000 }];
+          }
+          videoSender.setParameters(params).catch(e =>
+            console.warn('[WebRTC] Could not set encoding params:', e)
+          );
+        }
+      }
+      if (pc.connectionState === 'failed') {
+        console.warn(`[WebRTC] Peer ${peerId} connection failed — removing.`);
+        removePeerConnection(peerId);
       }
     };
 
     peerConnections.current.set(peerId, pc);
     return pc;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — removePeerConnection defined below
 
   const removePeerConnection = useCallback((peerId: string) => {
     const pc = peerConnections.current.get(peerId);
@@ -100,6 +150,7 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
       pc.close();
       peerConnections.current.delete(peerId);
     }
+    iceCandidateQueues.current.delete(peerId);
     setRemoteStreams((prev) => {
       const updated = { ...prev };
       delete updated[peerId];
@@ -108,46 +159,44 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
   }, []);
 
   const connectWs = useCallback((activeStream: MediaStream) => {
-    // Standard cleanup if an untethered ghost connection already somehow exists
     if (ws.current) {
-      ws.current.onclose = null; // Explicitly flush cyclic recursions
+      ws.current.onclose = null;
       ws.current.close();
       ws.current = null;
     }
 
-    const secureUrl = token ? `${signalingUrl}?token=${token}` : signalingUrl;
-    ws.current = new WebSocket(secureUrl);
+    const url = token ? `${signalingUrl}?token=${token}` : signalingUrl;
+    ws.current = new WebSocket(url);
 
     ws.current.onopen = () => {
-      console.log('WebSocket network tunnel successful');
-      
-      // Reset exponential backoff constraints back to 0 so the next fail acts quickly
-      reconnectAttemptRef.current = 0; 
-      
-      // Re-register to the active room natively passing explicit user signatures
+      console.log('[WebRTC] WebSocket connected');
+      reconnectAttemptRef.current = 0;
+
+      // Clear stale peer connections before re-announcing presence in the room
+      peerConnections.current.forEach((pc) => pc.close());
+      peerConnections.current.clear();
+      iceCandidateQueues.current.clear();
+      setRemoteStreams({});
+
       ws.current?.send(JSON.stringify({ type: 'join', payload: { roomId, user } }));
     };
 
     ws.current.onclose = () => {
       ws.current = null;
-      
-      // Determine exponential wait timer resolving: 1000ms, 2000ms, 4000ms, 8000ms...
       if (reconnectAttemptRef.current < maxReconnectAttempts) {
         const timeoutMs = Math.pow(2, reconnectAttemptRef.current) * 1000;
-        console.warn(`WebSocket signaling dropped by Remote Host. Attempting reconnection in ${timeoutMs}ms...`);
-        
+        console.warn(`[WebRTC] Disconnected. Reconnecting in ${timeoutMs}ms...`);
         setTimeout(() => {
           reconnectAttemptRef.current++;
           connectWs(activeStream);
         }, timeoutMs);
-
       } else {
-        console.error('Fatal WebRTC Signaling Error: Exhausted maximum backend reconnection thresholds.');
+        console.error('[WebRTC] Exhausted reconnection attempts.');
       }
     };
 
     ws.current.onerror = (err) => {
-      console.error('WebSocket Error encountered during streaming negotiations:', err);
+      console.error('[WebRTC] WebSocket error:', err);
     };
 
     ws.current.onmessage = async (event) => {
@@ -157,133 +206,135 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
 
         switch (type) {
           case 'connected':
-            // Initial payload from server assigning us a socket ID
             myIdRef.current = payload.userId;
             break;
-            
-          case 'user-joined':
-            {
-              const peerId = payload.userId;
-              if (peerId === myIdRef.current) break; // sanity check
-              
-              const pc = createPeerConnection(peerId, activeStream);
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              ws.current?.send(JSON.stringify({
-                type: 'offer',
-                payload: { 
-                  targetId: peerId, 
-                  senderId: myIdRef.current, 
-                  sdp: pc.localDescription 
-                }
-              }));
-            }
-            break;
 
-          case 'offer':
-            {
-              const { targetId, senderId, sdp } = payload;
-              // Ignore messages not structurally mapped for our exact user ID explicitly
-              if (targetId && targetId !== myIdRef.current) break;
-              
-              let pc = peerConnections.current.get(senderId);
-              if (!pc) {
-                pc = createPeerConnection(senderId, activeStream);
-              }
+          case 'user-joined': {
+            const peerId = payload.userId;
+            if (peerId === myIdRef.current) break;
+
+            const pc = createPeerConnection(peerId, activeStream);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            // Drain any ICE candidates that arrived before the offer was created
+            await drainIceCandidates(peerId, pc);
+            ws.current?.send(JSON.stringify({
+              type: 'offer',
+              payload: { targetId: peerId, senderId: myIdRef.current, sdp: pc.localDescription },
+            }));
+            break;
+          }
+
+          case 'offer': {
+            const { targetId, senderId, sdp } = payload;
+            if (targetId && targetId !== myIdRef.current) break;
+
+            let pc = peerConnections.current.get(senderId);
+            if (!pc) pc = createPeerConnection(senderId, activeStream);
+
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            // CRITICAL: drain queued ICE candidates now that remote description is set
+            await drainIceCandidates(senderId, pc);
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.current?.send(JSON.stringify({
+              type: 'answer',
+              payload: { targetId: senderId, senderId: myIdRef.current, sdp: pc.localDescription },
+            }));
+            break;
+          }
+
+          case 'answer': {
+            const { targetId, senderId, sdp } = payload;
+            if (targetId && targetId !== myIdRef.current) break;
+
+            const pc = peerConnections.current.get(senderId);
+            if (pc) {
               await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-              const answer = await pc.createAnswer();
-              await pc.setLocalDescription(answer);
-              ws.current?.send(JSON.stringify({
-                type: 'answer',
-                payload: { 
-                  targetId: senderId, 
-                  senderId: myIdRef.current, 
-                  sdp: pc.localDescription 
-                }
-              }));
+              // Drain any ICE candidates that arrived before the answer
+              await drainIceCandidates(senderId, pc);
             }
             break;
+          }
 
-          case 'answer':
-            {
-              const { targetId, senderId, sdp } = payload;
-              if (targetId && targetId !== myIdRef.current) break;
+          case 'ice-candidate': {
+            const { targetId, senderId, candidate } = payload;
+            if (targetId && targetId !== myIdRef.current) break;
 
-              const pc = peerConnections.current.get(senderId);
-              if (pc) {
-                await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            const pc = peerConnections.current.get(senderId);
+            if (!candidate) break;
+
+            const iceCandidate = new RTCIceCandidate(candidate);
+
+            if (pc?.remoteDescription) {
+              // Remote description is ready — apply immediately
+              try {
+                await pc.addIceCandidate(iceCandidate);
+              } catch (e) {
+                console.error(`[WebRTC] addIceCandidate failed for ${senderId}:`, e);
               }
-            }
-            break;
-
-          case 'ice-candidate':
-            {
-              const { targetId, senderId, candidate } = payload;
-              if (targetId && targetId !== myIdRef.current) break;
-
-              const pc = peerConnections.current.get(senderId);
-              if (pc && candidate) {
-                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+              // Queue until after setRemoteDescription
+              if (!iceCandidateQueues.current.has(senderId)) {
+                iceCandidateQueues.current.set(senderId, []);
               }
+              iceCandidateQueues.current.get(senderId)!.push(iceCandidate);
             }
             break;
+          }
 
           case 'user-left':
             removePeerConnection(payload.userId);
             break;
-            
+
           default:
-            console.log('Unhandled signaling message mapping:', type);
+            console.log('[WebRTC] Unhandled message type:', type);
         }
       } catch (error) {
-        console.error('Error handling signaling message', error);
+        console.error('[WebRTC] Error handling signaling message:', error);
       }
     };
-  }, [signalingUrl, roomId, createPeerConnection, removePeerConnection]);
+  }, [signalingUrl, roomId, token, user, createPeerConnection, removePeerConnection, drainIceCandidates]);
 
   const initialize = useCallback(async () => {
-    if (ws.current) return;
-    
-    // 1. Get DOM media hardware natively
-    const stream = await startMedia();
+    // Guard against already-open connections
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) return;
 
-    // 2. Safely trigger WS initialization looping with retry capacities passing context active state
+    const stream = await startMedia();
     connectWs(stream);
   }, [connectWs, startMedia]);
 
   const endCall = useCallback(() => {
-    // Neutralize exponential cyclic limits
-    reconnectAttemptRef.current = maxReconnectAttempts; 
+    // Prevent any further reconnection attempts
+    reconnectAttemptRef.current = maxReconnectAttempts;
 
-    // Teardown all PCs
-    peerConnections.current.forEach(pc => pc.close());
+    peerConnections.current.forEach((pc) => pc.close());
     peerConnections.current.clear();
-    
-    // Close WS ensuring recursion listeners are correctly flushed null memory
+    iceCandidateQueues.current.clear();
+
     if (ws.current) {
-        ws.current.onclose = null; 
-        ws.current.close();
-        ws.current = null;
+      ws.current.onclose = null;
+      ws.current.close();
+      ws.current = null;
     }
-    
-    // Stop camera/mic hardware physical inputs
-    localStream?.getTracks().forEach((track) => track.stop());
+
+    // Use the stable ref so this function doesn't depend on the localStream state value
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+
     setLocalStream(null);
     setRemoteStreams({});
     myIdRef.current = null;
-  }, [localStream]);
+  }, []); // No dependencies — uses refs throughout
 
-  // Handle immediate Cleanup correctly if DOM physically unmounted
+  // Use a stable ref so the cleanup effect never re-fires due to endCall identity changing
+  const endCallRef = useRef(endCall);
+  useEffect(() => { endCallRef.current = endCall; }, [endCall]);
+
   useEffect(() => {
-    return () => {
-      endCall();
-    };
-  }, [endCall]);
+    return () => { endCallRef.current(); };
+  }, []); // Only runs on true component unmount
 
-  return {
-    localStream,
-    remoteStreams,
-    initialize,
-    endCall,
-  };
+  return { localStream, recordingStream, remoteStreams, initialize, endCall };
 };

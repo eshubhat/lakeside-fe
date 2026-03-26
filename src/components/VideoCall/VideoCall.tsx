@@ -3,43 +3,44 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useWebRTC } from '../../hooks/useWebRTC';
 import { Copy, Video } from 'lucide-react';
+import { memoryToken } from '../../services/api';
 
 const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:3001';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // Helper component to render individual videos cleanly in the ArchitectSaaS style
-const VideoPlayer: React.FC<{ stream: MediaStream | null; isLocal?: boolean; label: string }> = ({ 
-  stream, 
-  isLocal, 
-  label 
+const VideoPlayer: React.FC<{ stream: MediaStream | null; isLocal?: boolean; label: string }> = ({
+  stream,
+  isLocal,
+  label
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+      videoRef.current.srcObject = stream ?? null;
     }
   }, [stream]);
 
   if (!stream && !isLocal) {
     return (
-       <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-4 min-h-[200px] w-full">
-          <div className="flex gap-1 items-end h-6">
-            <span className="w-1.5 h-3 bg-primary/20 rounded-full animate-pulse" />
-            <span className="w-1.5 h-6 bg-primary/40 rounded-full animate-pulse delay-75" />
-            <span className="w-1.5 h-4 bg-primary/20 rounded-full animate-pulse delay-150" />
-          </div>
-          <span className="font-medium text-sm tracking-wide uppercase">Connecting Peer...</span>
-       </div>
+      <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-4 min-h-[200px] w-full">
+        <div className="flex gap-1 items-end h-6">
+          <span className="w-1.5 h-3 bg-primary/20 rounded-full animate-pulse" />
+          <span className="w-1.5 h-6 bg-primary/40 rounded-full animate-pulse delay-75" />
+          <span className="w-1.5 h-4 bg-primary/20 rounded-full animate-pulse delay-150" />
+        </div>
+        <span className="font-medium text-sm tracking-wide uppercase">Connecting Peer...</span>
+      </div>
     );
   }
 
   if (!stream && isLocal) {
     return (
-       <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-2 min-h-[200px] w-full">
-         <Video className="w-8 h-8 text-midnight/20" />
-         <span className="font-medium text-sm">Media Hardware Offline</span>
-       </div>
+      <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-2 min-h-[200px] w-full">
+        <Video className="w-8 h-8 text-midnight/20" />
+        <span className="font-medium text-sm">Media Hardware Offline</span>
+      </div>
     );
   }
 
@@ -55,11 +56,11 @@ const VideoPlayer: React.FC<{ stream: MediaStream | null; isLocal?: boolean; lab
       <div className="absolute bottom-4 left-4 right-4 p-4 bg-white/90 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-between shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-              <span className="text-white font-bold text-lg">{label[0]}</span>
+            <span className="text-white font-bold text-lg">{label[0]}</span>
           </div>
           <div>
-              <div className="text-sm font-bold text-midnight">{label}</div>
-              <div className="text-xs font-semibold text-primary">Uncompressed Feed Active</div>
+            <div className="text-sm font-bold text-midnight">{label}</div>
+            <div className="text-xs font-semibold text-primary">Uncompressed Feed Active</div>
           </div>
         </div>
       </div>
@@ -84,7 +85,8 @@ export const VideoCall: React.FC = () => {
 
   // Hook handles connection for a particular room dynamically securely passing credentials bounded into JWT verification
   const {
-    localStream,
+    localStream,       // 720p preview — used for VideoPlayer tile display
+    recordingStream,   // 4K full quality — used for MediaRecorder only
     remoteStreams,
     initialize,
     endCall,
@@ -101,15 +103,15 @@ export const VideoCall: React.FC = () => {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const startRecording = useCallback(() => {
-    if (!localStream) return;
-    
+    if (!recordingStream) return;
+
     setRecordedBlob(null);
     recordedChunksRef.current = [];
-    
+
     // Target ~8 Mbps for high quality 4K/1080p recording
     const videoBitsPerSecond = 8000000;
     let options: any = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond };
-    
+
     // Fallbacks for codec support
     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
       options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond };
@@ -122,13 +124,13 @@ export const VideoCall: React.FC = () => {
     }
 
     try {
-      const recorder = new MediaRecorder(localStream, options);
+      const recorder = new MediaRecorder(recordingStream, options);
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
         }
       };
-      
+
       recorder.onstop = () => {
         const blob = new Blob(recordedChunksRef.current, {
           type: options.mimeType || 'video/webm'
@@ -142,7 +144,7 @@ export const VideoCall: React.FC = () => {
     } catch (e) {
       console.error('Exception while creating MediaRecorder:', e);
     }
-  }, [localStream]);
+  }, [recordingStream]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -150,7 +152,7 @@ export const VideoCall: React.FC = () => {
       setIsRecording(false);
     }
   }, []);
-  
+
   // Handlers for exporting Blob memory output natively
   const handleDownload = () => {
     if (!recordedBlob) return;
@@ -175,7 +177,8 @@ export const VideoCall: React.FC = () => {
 
     const xhr = new XMLHttpRequest();
     // Connects exactly to the NodeJS REST endpoint conditionally mapped via Vite ENV variables
-    xhr.open('POST', `${API_URL}/upload`, true); 
+    xhr.open('POST', `${API_URL}/upload`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${memoryToken}`);
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -239,29 +242,29 @@ export const VideoCall: React.FC = () => {
       {/* Header matching Landing */}
       <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-midnight/5 shadow-sm">
         <div className="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
-            <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/')}>
-               <span className="text-xl font-bold tracking-tight text-midnight font-headline">ArchitectSaaS</span>
-               <span className="px-3 py-1 bg-red-500/10 text-red-600 rounded-full text-xs uppercase tracking-widest font-bold">Live Studio</span>
+          <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/')}>
+            <span className="text-xl font-bold tracking-tight text-midnight font-headline">ArchitectSaaS</span>
+            <span className="px-3 py-1 bg-red-500/10 text-red-600 rounded-full text-xs uppercase tracking-widest font-bold">Live Studio</span>
+          </div>
+
+          {hasStarted && (
+            <div className="flex items-center gap-4 bg-surface-low rounded-xl px-1.5 py-1.5 border border-midnight/5">
+              <span className="text-sm font-bold text-midnight pl-3">Room: <span className="text-primary font-mono ml-1 tracking-wider">{activeRoomId}</span></span>
+              <button
+                onClick={copyInviteLink}
+                className="flex items-center gap-2 text-xs font-bold text-midnight bg-white shadow-sm border border-midnight/5 hover:border-primary/30 hover:text-primary px-3 py-1.5 rounded-lg transition-all"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy Link
+              </button>
             </div>
-            
-            {hasStarted && (
-              <div className="flex items-center gap-4 bg-surface-low rounded-xl px-1.5 py-1.5 border border-midnight/5">
-                  <span className="text-sm font-bold text-midnight pl-3">Room: <span className="text-primary font-mono ml-1 tracking-wider">{activeRoomId}</span></span>
-                  <button 
-                  onClick={copyInviteLink}
-                  className="flex items-center gap-2 text-xs font-bold text-midnight bg-white shadow-sm border border-midnight/5 hover:border-primary/30 hover:text-primary px-3 py-1.5 rounded-lg transition-all"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy Link
-                  </button>
-              </div>
-            )}
+          )}
         </div>
       </header>
 
       <main className="flex flex-col items-center pt-28 px-6 font-sans pb-32">
         <div className="w-full max-w-7xl relative">
-          
+
           {/* Recording active indicator */}
           {isRecording && (
             <div className="absolute -top-12 right-0 z-10 flex items-center justify-center bg-red-500 rounded-full px-4 py-1.5 shadow-lg shadow-red-500/30 animate-pulse">
@@ -272,12 +275,12 @@ export const VideoCall: React.FC = () => {
 
           {/* We use CSS grid to automatically wrap and size the video elements */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-max relative z-0">
-            
+
             {/* Always display local video first */}
-            <VideoPlayer 
-              stream={localStream} 
-              isLocal 
-              label="You (Local Host)" 
+            <VideoPlayer
+              stream={localStream}
+              isLocal
+              label="You (Local Host)"
             />
 
             {/* Render skeleton card if no one else has joined yet */}
@@ -287,13 +290,13 @@ export const VideoCall: React.FC = () => {
 
             {/* Render an individual Video item for each participant */}
             {streamsMap.map(([peerId, stream]) => (
-              <VideoPlayer 
-                key={peerId} 
-                stream={stream} 
-                label={`Peer: ${peerId.substring(0, 5)}`} 
+              <VideoPlayer
+                key={peerId}
+                stream={stream}
+                label={`Peer: ${peerId.substring(0, 5)}`}
               />
             ))}
-            
+
           </div>
         </div>
 
@@ -316,11 +319,11 @@ export const VideoCall: React.FC = () => {
               </button>
 
               {/* Recording Controls Divider */}
-              {localStream && (
+              {recordingStream && (
                 <div className="h-8 w-px bg-midnight/10 mx-2" />
               )}
-              
-              {localStream && !isRecording && (
+
+              {recordingStream && !isRecording && (
                 <button
                   onClick={startRecording}
                   className="bg-white border border-midnight/10 text-midnight font-bold px-6 py-4 rounded-xl text-md flex items-center justify-center gap-2 hover:bg-surface-low transition-all"
@@ -339,7 +342,7 @@ export const VideoCall: React.FC = () => {
                   Stop Recording
                 </button>
               )}
-              
+
               {/* Download/Upload Operations */}
               {recordedBlob && !isRecording && (
                 <>
@@ -356,13 +359,12 @@ export const VideoCall: React.FC = () => {
                   <button
                     onClick={handleUpload}
                     disabled={isUploading || uploadSuccess}
-                    className={`flex items-center justify-center font-bold px-6 py-4 rounded-xl text-md shadow-lg shadow-primary/20 transition-all focus:outline-none relative overflow-hidden ${
-                      uploadSuccess ? 'bg-midnight text-primary' : 'emerald-gradient text-white hover:scale-105 active:scale-95'
-                    } disabled:opacity-50`}
+                    className={`flex items-center justify-center font-bold px-6 py-4 rounded-xl text-md shadow-lg shadow-primary/20 transition-all focus:outline-none relative overflow-hidden ${uploadSuccess ? 'bg-midnight text-primary' : 'emerald-gradient text-white hover:scale-105 active:scale-95'
+                      } disabled:opacity-50`}
                   >
                     {/* Progress Bar Background */}
                     {isUploading && (
-                      <div 
+                      <div
                         className="absolute top-0 left-0 h-full bg-white/20 transition-all duration-300 pointer-events-none"
                         style={{ width: `${uploadProgress}%` }}
                       />

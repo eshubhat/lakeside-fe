@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, setMemoryToken } from '../services/api';
+import Loading from '../pages/Loading';
 
 export interface User {
   id: string;
@@ -60,9 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-        await api.post('/auth/logout');
-    } catch(e) {} // Error boundaries
-    
+      await api.post('/auth/logout');
+    } catch (e) { } // Error boundaries
+
     setUser(null);
     setToken(null);
     setMemoryToken(null);
@@ -71,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   if (isInitializing) {
     // Avoid dropping the router into unauthenticated loops before resolving active sessions natively
-    return null; 
+    return <Loading />;
   }
 
   return (

@@ -8,7 +8,7 @@ export default function RoomEntry() {
     const navigate = useNavigate();
 
     const handleCreateRoom = () => {
-        const newRoom = Math.random().toString(36).substring(2, 10);
+        const newRoom = crypto.randomUUID().slice(0, 8);
         navigate(`/room/${newRoom}`);
     };
 
@@ -31,7 +31,7 @@ export default function RoomEntry() {
             </header>
 
             <main className="flex items-center justify-center pt-24 px-6">
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="max-w-xl w-full"
@@ -49,7 +49,7 @@ export default function RoomEntry() {
                     </div>
 
                     <div className="bg-white rounded-3xl shadow-2xl border border-midnight/5 p-8 md:p-12 mb-8">
-                        <button 
+                        <button
                             onClick={handleCreateRoom}
                             className="w-full emerald-gradient text-white font-bold px-8 py-5 rounded-xl text-lg flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-primary/20 mb-8"
                         >
@@ -66,15 +66,15 @@ export default function RoomEntry() {
                         <form onSubmit={handleJoinRoom} className="flex gap-3">
                             <div className="relative flex-1">
                                 <Keyboard className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={joinId}
                                     onChange={(e) => setJoinId(e.target.value)}
-                                    placeholder="Enter Room Code" 
+                                    placeholder="Enter Room Code"
                                     className="w-full bg-surface border border-midnight/10 rounded-xl py-4 flex-1 pl-12 pr-4 text-midnight font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
                                 />
                             </div>
-                            <button 
+                            <button
                                 type="submit"
                                 disabled={!joinId.trim()}
                                 className="bg-midnight hover:bg-slate-800 text-white font-bold px-6 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
