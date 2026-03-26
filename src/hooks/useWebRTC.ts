@@ -45,8 +45,13 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
   const startMedia = useCallback(async () => {
     try {
       // 1. HIGH QUALITY — local recording only, never transmitted over WebRTC
+      // const highQualityStream = await navigator.mediaDevices.getUserMedia({
+      //   video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
+      //   audio: true,
+      // });
+
       const highQualityStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
+        video: true,
         audio: true,
       });
 
