@@ -50,10 +50,18 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
       //   audio: true,
       // });
 
-      const highQualityStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      // In startMedia, split the try/catch:
+      let highQualityStream: MediaStream;
+      try {
+        highQualityStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { min: 640, ideal: 3840 }, height: { min: 480, ideal: 2160 } },
+          audio: true,
+        });
+        console.log('[WebRTC] Recording stream OK');
+      } catch (e) {
+        console.error('[WebRTC] Recording stream failed:', e); // ← check this on mobile
+        throw e;
+      }
 
       const videoTrack = highQualityStream.getVideoTracks()[0];
       if (videoTrack) {
