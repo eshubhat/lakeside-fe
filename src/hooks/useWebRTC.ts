@@ -123,6 +123,14 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
   const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] ICE state ${peerId}: ${pc.iceConnectionState}`);
+    };
+
+    pc.onsignalingstatechange = () => {
+      console.log(`[WebRTC] Signaling state ${peerId}: ${pc.signalingState}`);
+    };
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
