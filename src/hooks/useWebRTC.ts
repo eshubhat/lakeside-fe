@@ -24,6 +24,9 @@ const ICE_SERVERS: RTCIceServer[] = [
     : []),
 ];
 
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 export const useWebRTC = (signalingUrl: string, roomId: string, token: string | null, user: any) => {
   // previewStream — low quality, sent over WebRTC to peers (shown in VideoPlayer tiles)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -44,49 +47,60 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
 
   const startMedia = useCallback(async () => {
     try {
-      // 1. HIGH QUALITY — local recording only, never transmitted over WebRTC
-      // const highQualityStream = await navigator.mediaDevices.getUserMedia({
-      //   video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
-      //   audio: true,
-      // });
-
-      // In startMedia, split the try/catch:
-      let highQualityStream: MediaStream;
-      try {
-        highQualityStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { min: 640, ideal: 3840 }, height: { min: 480, ideal: 2160 } },
+      if (isMobile) {
+        // Mobile: open camera ONCE — two getUserMedia calls will NotReadableError
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { min: 640, ideal: 3840 },
+            height: { min: 480, ideal: 2160 },
+          },
           audio: true,
         });
-        console.log('[WebRTC] Recording stream OK');
-      } catch (e) {
-        console.error('[WebRTC] Recording stream failed:', e); // ← check this on mobile
-        throw e;
-      }
 
-      const videoTrack = highQualityStream.getVideoTracks()[0];
-      if (videoTrack) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
         const settings = videoTrack.getSettings();
-        console.log(`[WebRTC] Recording resolution: ${settings.width}x${settings.height}`);
+        console.log(`[WebRTC] Mobile camera opened: ${settings.width}x${settings.height}`);
+
+        // Both streams share the same tracks — one camera handle
+        // Quality difference is handled by RTCRtpSender maxBitrate cap, not capture resolution
+        const highQualityStream = new MediaStream([videoTrack, audioTrack]);
+        recordingStreamRef.current = highQualityStream;
+        setRecordingStream(highQualityStream);
+
+        const previewStream = new MediaStream([videoTrack, audioTrack]);
+        localStreamRef.current = previewStream;
+        setLocalStream(previewStream);
+
+        return previewStream;
+
+      } else {
+        // Desktop: two separate getUserMedia calls are fine
+        // High quality — local recording only, never transmitted over WebRTC
+        const highQualityStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
+          audio: true,
+        });
+        const settings = highQualityStream.getVideoTracks()[0].getSettings();
+        console.log(`[WebRTC] Desktop recording stream: ${settings.width}x${settings.height}`);
+        recordingStreamRef.current = highQualityStream;
+        setRecordingStream(highQualityStream);
+
+        // Low quality — transmitted to peers via WebRTC only
+        const previewStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          },
+          audio: true,
+        });
+        localStreamRef.current = previewStream;
+        setLocalStream(previewStream);
+
+        return previewStream;
       }
 
-      recordingStreamRef.current = highQualityStream;
-      setRecordingStream(highQualityStream);
-
-      // 2. LOW QUALITY — transmitted to peers via WebRTC, shown in video tiles
-      //    720p at 30fps is plenty for a live preview feed (Riverside uses similar)
-      const previewStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-        audio: true,
-      });
-
-      // Cap the WebRTC video encoding to 1.5 Mbps so TURN bandwidth stays low
-      // This is applied per-sender after peer connections are created (see createPeerConnection)
-      console.log(`[WebRTC] Preview stream ready for transmission`);
-
-      localStreamRef.current = previewStream;
-      setLocalStream(previewStream);
-
-      return previewStream; // Only the preview stream is passed into WebRTC peer connections
     } catch (error) {
       console.error('[WebRTC] Error accessing media devices.', error);
       throw error;
@@ -319,7 +333,6 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
   }, [connectWs, startMedia]);
 
   const endCall = useCallback(() => {
-    // Prevent any further reconnection attempts
     reconnectAttemptRef.current = maxReconnectAttempts;
 
     peerConnections.current.forEach((pc) => pc.close());
@@ -332,11 +345,21 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
       ws.current = null;
     }
 
-    // Use the stable ref so this function doesn't depend on the localStream state value
+    // Stop preview tracks
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
 
+    if (isMobile) {
+      // Tracks are shared — already stopped above, just clear the ref
+      recordingStreamRef.current = null;
+    } else {
+      // Desktop has separate tracks — stop them independently
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+
     setLocalStream(null);
+    setRecordingStream(null);
     setRemoteStreams({});
     myIdRef.current = null;
   }, []); // No dependencies — uses refs throughout
