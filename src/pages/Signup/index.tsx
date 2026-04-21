@@ -23,8 +23,8 @@ export default function Signup() {
     try {
       const response = await api.post('/auth/google', { idToken: credentialResponse.credential });
       const { token, user } = response.data;
-      signup(user, token); // Symmetrically stores payload identically matching custom routes
-      navigate('/room');
+      signup(user, token);
+      navigate('/');
     } catch (err: any) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.error || 'External Google account linkage gracefully failed.');
@@ -51,7 +51,7 @@ export default function Signup() {
       const { token, user } = response.data;
 
       signup(user, token);
-      navigate('/room');
+      navigate('/');
     } catch (err: any) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.error || 'Failed to provision account.');

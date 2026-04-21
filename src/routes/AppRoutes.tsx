@@ -4,7 +4,7 @@ import Loading from "../pages/Loading";
 
 import { ProtectedRoute } from '../components/ProtectedRoute';
 
-const LandingPage = lazy(() => import("../pages/Landing"));
+const Home = lazy(() => import("../pages/Home"));
 const RoomEntry = lazy(() => import("../pages/RoomEntry"));
 const VideoCall = lazy(() => import("../components/VideoCall/VideoCall"));
 const Login = lazy(() => import("../pages/Login"));
@@ -14,12 +14,13 @@ export default function AppRoutes() {
     return (
         <Suspense fallback={<Loading />}>
             <Routes>
-                <Route path="/" element={<LandingPage />} />
+                {/* Home: auto-creates room, shows signup modal, then room-ready popup */}
+                <Route path="/" element={<Home />} />
                 <Route path='/load' element={<Loading />} />
                 <Route path='/login' element={<Login />} />
                 <Route path='/signup' element={<Signup />} />
-                
-                {/* Dynamically styled staging room replacing the instant navigator implicitly isolated */}
+
+                {/* Protected studio routes */}
                 <Route element={<ProtectedRoute />}>
                   <Route path='/room' element={<RoomEntry />} />
                   <Route path='/room/:roomId' element={<VideoCall />} />

@@ -11,7 +11,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // Route security boundary bouncing unauthenticated actors aggressively
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Abstractly parses children sequentially allowing identical downstream flexibility

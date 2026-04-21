@@ -23,7 +23,7 @@ export default function Login() {
       const response = await api.post('/auth/google', { idToken: credentialResponse.credential });
       const { token, user } = response.data;
       login(user, token);
-      navigate('/room');
+      navigate('/');
     } catch (err: any) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.error || 'External Google Authentication gracefully failed.');
@@ -50,7 +50,7 @@ export default function Login() {
       const { token, user } = response.data;
 
       login(user, token);
-      navigate('/room'); // Redirect securely to the staging entry UI after context updates
+      navigate('/'); // Redirect to home → home will show room-ready popup
     } catch (err: any) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.error || 'Invalid credentials.');
