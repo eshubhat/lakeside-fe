@@ -5,29 +5,22 @@ export interface SignalMessage {
   payload?: any;
 }
 
-const ICE_SERVERS: RTCIceServer[] = [
-  // ✅ Google STUN (fast direct connection)
+/** STUN-only fallback — used until dynamic credentials are ready */
+const STUN_FALLBACK: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
-
-  // ✅ Metered TURN (fallback relay)
-  ...(import.meta.env.VITE_TURN_URL
-    ? [
-      {
-        urls: [
-          import.meta.env.VITE_TURN_URL,              // udp
-          import.meta.env.VITE_TURN_URL_TCP || '',    // tcp fallback
-        ].filter(Boolean),
-        username: import.meta.env.VITE_TURN_USERNAME,
-        credential: import.meta.env.VITE_TURN_CREDENTIAL,
-      },
-    ]
-    : []),
 ];
 
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-export const useWebRTC = (signalingUrl: string, roomId: string, token: string | null, user: any) => {
+export const useWebRTC = (
+  signalingUrl: string,
+  roomId: string,
+  token: string | null,
+  user: any,
+  /** Dynamic ICE servers from useTurnCredentials — falls back to STUN-only if null */
+  iceServers: RTCIceServer[] | null,
+) => {
   // previewStream — low quality, sent over WebRTC to peers (shown in VideoPlayer tiles)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   // recordingStream — full quality, used only by MediaRecorder in VideoCall.tsx, never sent over the network
@@ -121,7 +114,8 @@ export const useWebRTC = (signalingUrl: string, roomId: string, token: string | 
   }, []);
 
   const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const resolvedIceServers = iceServers ?? STUN_FALLBACK;
+    const pc = new RTCPeerConnection({ iceServers: resolvedIceServers });
 
     pc.oniceconnectionstatechange = () => {
       console.log(`[WebRTC] ICE state ${peerId}: ${pc.iceConnectionState}`);
