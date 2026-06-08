@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useWebRTC } from '../../hooks/useWebRTC';
+import { useTurnCredentials } from '../../hooks/useTurnCredentials';
 import { Check, Link2, Video } from 'lucide-react';
 import { MultipartUploader, type UploadProgress } from '../../services/mutlipartUpload';
 
@@ -96,11 +97,16 @@ export const VideoCall: React.FC = () => {
     const activeRoomId = roomId || 'default-room';
     const { user, token } = useAuth();
 
+    // Fetch dynamic TURN credentials before creating any peer connection.
+    // Falls back to STUN-only if the backend request fails.
+    const { iceServers, loading: turnLoading, error: turnError } = useTurnCredentials();
+
     const { localStream, recordingStream, remoteStreams, initialize, endCall } = useWebRTC(
         SIGNALING_URL,
         activeRoomId,
         token,
-        user
+        user,
+        iceServers,
     );
 
     // ── Recording state ────────────────────────────────────────────────────────
@@ -236,6 +242,10 @@ export const VideoCall: React.FC = () => {
         }
     };
 
+    // The start button is disabled while TURN credentials are being fetched
+    // to ensure the first peer connection is created with the correct iceServers.
+    const startDisabled = turnLoading;
+
     const streamsMap = Object.entries(remoteStreams);
     const inviteLink = `${window.location.origin}/room/${activeRoomId}`;
     const [linkCopied, setLinkCopied] = useState(false);
@@ -360,12 +370,24 @@ export const VideoCall: React.FC = () => {
 
                 {/* Control bar */}
                 <div className="flex flex-wrap items-center justify-center gap-4 fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl p-3 pr-4 rounded-2xl border border-midnight/10 shadow-2xl shadow-primary/10 z-50">
+                    {/* TURN fallback warning — shown non-intrusively when credentials fetch failed */}
+                    {turnError && (
+                        <div className="absolute -top-12 left-0 z-10 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-4 py-1.5">
+                            <span className="text-xs font-bold">⚠ TURN unavailable — STUN only (local networks only)</span>
+                        </div>
+                    )}
                     {!hasStarted ? (
                         <button
+                            id="start-call-btn"
                             onClick={handleStart}
-                            className="emerald-gradient text-white font-bold px-10 py-4 rounded-xl text-md flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                            disabled={startDisabled}
+                            title={turnLoading ? 'Fetching TURN credentials…' : 'Start Hardware & Enter Call'}
+                            className="emerald-gradient text-white font-bold px-10 py-4 rounded-xl text-md flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
                         >
-                            Start Hardware & Enter Call
+                            {turnLoading && (
+                                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                            )}
+                            {turnLoading ? 'Preparing…' : 'Start Hardware & Enter Call'}
                         </button>
                     ) : (
                         <>
