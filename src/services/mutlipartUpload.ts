@@ -61,7 +61,6 @@ export class MultipartUploader {
         this.options = options;
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────────
 
     /**
      * Initiates the multipart upload on R2. Must be called before addChunk().
@@ -103,7 +102,7 @@ export class MultipartUploader {
      * Flushes any remaining buffered data and finalises the multipart upload.
      * Calls onComplete with the presigned download URL once R2 confirms.
      */
-    async finalise(durationSeconds?: number): Promise<void> {
+    async finalise(durationSeconds?: number, name?: string): Promise<void> {
         if (this.aborted) return;
         this.finalising = true;
 
@@ -134,6 +133,7 @@ export class MultipartUploader {
                 parts: this.completedParts,
                 roomId: this.options.roomId,
                 durationSeconds,
+                name,
             });
             this.options.onComplete?.(data.downloadUrl);
         } catch (err) {
@@ -164,7 +164,6 @@ export class MultipartUploader {
         }
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────────
 
     // R2 requires every non-final part to be EXACTLY this size.
     // 8 MB is a safe multiple of the 5 MB minimum and gives clean boundaries.

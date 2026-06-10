@@ -47,7 +47,11 @@ export const useWebRTC = (
             width: { min: 640, ideal: 3840 },
             height: { min: 480, ideal: 2160 },
           },
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
 
         const videoTrack = stream.getVideoTracks()[0];
@@ -72,7 +76,11 @@ export const useWebRTC = (
         // High quality — local recording only, never transmitted over WebRTC
         const highQualityStream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
         const settings = highQualityStream.getVideoTracks()[0].getSettings();
         console.log(`[WebRTC] Desktop recording stream: ${settings.width}x${settings.height}`);
@@ -86,7 +94,11 @@ export const useWebRTC = (
             height: { ideal: 720 },
             frameRate: { ideal: 30 },
           },
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
         localStreamRef.current = previewStream;
         setLocalStream(previewStream);
@@ -366,7 +378,61 @@ export const useWebRTC = (
     myIdRef.current = null;
   }, []); // No dependencies — uses refs throughout
 
-  // Use a stable ref so the cleanup effect never re-fires due to endCall identity changing
+  const changeDevice = useCallback(async (deviceId: string, kind: 'audioinput' | 'videoinput') => {
+    try {
+      const isVideo = kind === 'videoinput';
+      const constraints = {
+        [isVideo ? 'video' : 'audio']: isVideo 
+          ? { deviceId: { exact: deviceId } } 
+          : { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      };
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const newTrack = isVideo ? newStream.getVideoTracks()[0] : newStream.getAudioTracks()[0];
+
+      if (!newTrack) return;
+
+      if (localStreamRef.current) {
+        const oldTracks = isVideo
+          ? localStreamRef.current.getVideoTracks()
+          : localStreamRef.current.getAudioTracks();
+        oldTracks.forEach(t => { localStreamRef.current!.removeTrack(t); t.stop(); });
+        localStreamRef.current.addTrack(newTrack);
+      }
+
+      // CRITICAL: we mutate the same MediaStream object that MediaRecorder is
+      // already recording. removeTrack + addTrack on a live stream is the only
+      // safe way to inject a new track without stopping the recorder.
+      const recStream = recordingStreamRef.current;
+      if (recStream) {
+        if (recStream === localStreamRef.current) {
+          // Mobile path: streams are shared — track already updated above.
+        } else {
+          // Desktop path: separate high-quality recording stream.
+          const oldTracks = isVideo ? recStream.getVideoTracks() : recStream.getAudioTracks();
+          oldTracks.forEach(t => { recStream.removeTrack(t); t.stop(); });
+          // addTrack on the live stream — MediaRecorder sees the new track on
+          // the next timeslice without any stop/start needed.
+          recStream.addTrack(newTrack.clone());
+        }
+      }
+
+      // replaceTrack is non-destructive: no renegotiation needed, no interruption.
+      peerConnections.current.forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === (isVideo ? 'video' : 'audio'));
+        if (sender) {
+          sender.replaceTrack(newTrack).catch(err => console.error('[WebRTC] replaceTrack error:', err));
+        }
+      });
+
+      if (localStreamRef.current) {
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+      }
+    } catch (err) {
+      console.error('[WebRTC] Error changing device:', err);
+    }
+  }, []);
+
   const endCallRef = useRef(endCall);
   useEffect(() => { endCallRef.current = endCall; }, [endCall]);
 
@@ -374,5 +440,27 @@ export const useWebRTC = (
     return () => { endCallRef.current(); };
   }, []); // Only runs on true component unmount
 
-  return { localStream, recordingStream, remoteStreams, initialize, endCall };
+  const toggleAudio = useCallback(async (enabled: boolean, deviceId?: string) => {
+    if (!enabled) {
+      localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; t.stop(); localStreamRef.current?.removeTrack(t); });
+      recordingStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; t.stop(); recordingStreamRef.current?.removeTrack(t); });
+      if (localStreamRef.current) setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+    } else if (deviceId) {
+      await changeDevice(deviceId, 'audioinput');
+    }
+  }, [changeDevice]);
+
+  const toggleVideo = useCallback(async (enabled: boolean, deviceId?: string) => {
+    if (!enabled) {
+      localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = false; t.stop(); localStreamRef.current?.removeTrack(t); });
+      recordingStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = false; t.stop(); recordingStreamRef.current?.removeTrack(t); });
+      if (localStreamRef.current) setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+    } else if (deviceId) {
+      await changeDevice(deviceId, 'videoinput');
+    }
+  }, [changeDevice]);
+
+
+
+  return { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice };
 };
