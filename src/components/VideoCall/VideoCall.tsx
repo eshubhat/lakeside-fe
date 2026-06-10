@@ -3,18 +3,32 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useWebRTC } from '../../hooks/useWebRTC';
 import { useTurnCredentials } from '../../hooks/useTurnCredentials';
-import { Check, Link2, Video } from 'lucide-react';
 import { MultipartUploader, type UploadProgress } from '../../services/mutlipartUpload';
 
 const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:3001';
 
-// ─── VideoPlayer ──────────────────────────────────────────────────────────────
+type RecordingStatus =
+    | 'idle'
+    | 'starting'
+    | 'recording'
+    | 'paused'
+    | 'stopping'
+    | 'uploading'
+    | 'done'
+    | 'aborted';
 
-const VideoPlayer: React.FC<{ stream: MediaStream | null; isLocal?: boolean; label: string }> = ({
-    stream,
-    isLocal,
-    label,
-}) => {
+// Renders a single video feed as a dark-themed tile with Lumina design tokens.
+// Active speaker gets the vibrant-lime 2px border + pulse animation.
+
+const VideoTile: React.FC<{
+    stream: MediaStream | null;
+    isLocal?: boolean;
+    label: string;
+    isActive?: boolean;
+    isMuted?: boolean;
+    isCamOff?: boolean;
+    chip?: 'REC' | 'HD' | null;
+}> = ({ stream, isLocal, label, isActive, isMuted, isCamOff, chip }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
@@ -23,67 +37,86 @@ const VideoPlayer: React.FC<{ stream: MediaStream | null; isLocal?: boolean; lab
         }
     }, [stream]);
 
-    if (!stream && !isLocal) {
-        return (
-            <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-4 min-h-[200px] w-full">
-                <div className="flex gap-1 items-end h-6">
-                    <span className="w-1.5 h-3 bg-primary/20 rounded-full animate-pulse" />
-                    <span className="w-1.5 h-6 bg-primary/40 rounded-full animate-pulse delay-75" />
-                    <span className="w-1.5 h-4 bg-primary/20 rounded-full animate-pulse delay-150" />
-                </div>
-                <span className="font-medium text-sm tracking-wide uppercase">Connecting Peer...</span>
-            </div>
-        );
-    }
-
-    if (!stream && isLocal) {
-        return (
-            <div className="bg-white rounded-3xl shadow-xl border border-midnight/5 aspect-video flex flex-col items-center justify-center text-on-surface-variant gap-2 min-h-[200px] w-full">
-                <Video className="w-8 h-8 text-midnight/20" />
-                <span className="font-medium text-sm">Media Hardware Offline</span>
-            </div>
-        );
-    }
+    const initials = label.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
     return (
-        <div className="bg-white rounded-3xl overflow-hidden relative shadow-2xl border border-midnight/5 aspect-video w-full group">
-            <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted={isLocal}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-            />
-            <div className="absolute bottom-4 left-4 right-4 p-4 bg-white/90 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-between shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <span className="text-white font-bold text-lg">{label[0]}</span>
-                    </div>
-                    <div>
-                        <div className="text-sm font-bold text-midnight">{label}</div>
-                        <div className="text-xs font-semibold text-primary">Uncompressed Feed Active</div>
+        <div
+            className={isActive ? 'speaking-pulse' : ''}
+            style={{
+                position: 'relative',
+                background: 'var(--video-placeholder)',
+                border: isActive
+                    ? '2px solid var(--vibrant-lime)'
+                    : '1px solid var(--primary)',
+                aspectRatio: '16/9',
+                overflow: 'hidden',
+                transition: 'border-color 0.3s',
+                flex: 1,
+                minWidth: '260px',
+            }}
+        >
+            {/* Video / Avatar */}
+            {stream && !isCamOff ? (
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted={!!isLocal}
+                    style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover',
+                        transform: isLocal ? 'scaleX(-1)' : 'none' 
+                    }}
+                />
+            ) : (
+                <div style={{
+                    width: '100%', height: '100%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--primary-container)',
+                }}>
+                    <div style={{
+                        width: '80px', height: '80px', borderRadius: '50%',
+                        border: '1px solid var(--vibrant-lime)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                        <span className="type-headline-md" style={{ color: '#fff' }}>{initials}</span>
                     </div>
                 </div>
+            )}
+
+            {/* Bottom name label */}
+            <div className="tile-label">
+                <span
+                    className="material-symbols-outlined"
+                    style={{
+                        fontSize: '16px',
+                        fontVariationSettings: "'FILL' 1",
+                        color: isMuted
+                            ? 'var(--error)'
+                            : isActive
+                                ? 'var(--vibrant-lime)'
+                                : '#fff',
+                    }}
+                >
+                    {isMuted ? 'mic_off' : 'mic'}
+                </span>
+                <span>{label}</span>
             </div>
+
+            {/* Top-right chip */}
+            {chip && (
+                <div
+                    className={`tile-chip${chip === 'HD' ? ' lime' : ''}`}
+                    style={{ textTransform: 'uppercase' }}
+                >
+                    {chip}
+                </div>
+            )}
         </div>
     );
 };
 
-// ─── Recording state machine ──────────────────────────────────────────────────
-//
-//  idle → starting → recording → stopping → uploading → done
-//                                         ↘ aborted (on hang-up mid-record)
-//
-type RecordingStatus =
-    | 'idle'
-    | 'starting'    // awaiting multipart/start response
-    | 'recording'   // MediaRecorder running, parts streaming to R2
-    | 'stopping'    // onstop fired, final part + multipart/complete in flight
-    | 'uploading'   // (alias for stopping — used for UI label only)
-    | 'done'        // upload committed, download URL available
-    | 'aborted';    // user hung up mid-recording or an error occurred
-
-// ─── VideoCall ────────────────────────────────────────────────────────────────
 
 export const VideoCall: React.FC = () => {
     const { roomId } = useParams<{ roomId: string }>();
@@ -97,11 +130,10 @@ export const VideoCall: React.FC = () => {
     const activeRoomId = roomId || 'default-room';
     const { user, token } = useAuth();
 
-    // Fetch dynamic TURN credentials before creating any peer connection.
-    // Falls back to STUN-only if the backend request fails.
+    // Dynamic TURN credentials (falls back to STUN-only on failure)
     const { iceServers, loading: turnLoading, error: turnError } = useTurnCredentials();
 
-    const { localStream, recordingStream, remoteStreams, initialize, endCall } = useWebRTC(
+    const { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice } = useWebRTC(
         SIGNALING_URL,
         activeRoomId,
         token,
@@ -109,44 +141,113 @@ export const VideoCall: React.FC = () => {
         iceServers,
     );
 
-    // ── Recording state ────────────────────────────────────────────────────────
+    const [micEnabled, setMicEnabled] = useState(true);
+    const [camEnabled, setCamEnabled] = useState(true);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+    const [selectedAudioId, setSelectedAudioId] = useState<string>('');
+    const [selectedVideoId, setSelectedVideoId] = useState<string>('');
+
+    useEffect(() => {
+        const fetchDevices = async () => {
+            const allDevices = await navigator.mediaDevices.enumerateDevices();
+            setDevices(allDevices);
+            if (!selectedAudioId) {
+                const audio = allDevices.find(d => d.kind === 'audioinput');
+                if (audio) setSelectedAudioId(audio.deviceId);
+            }
+            if (!selectedVideoId) {
+                const video = allDevices.find(d => d.kind === 'videoinput');
+                if (video) setSelectedVideoId(video.deviceId);
+            }
+        };
+        fetchDevices();
+        navigator.mediaDevices.addEventListener('devicechange', fetchDevices);
+        return () => navigator.mediaDevices.removeEventListener('devicechange', fetchDevices);
+    }, [selectedAudioId, selectedVideoId]);
+
+    const handleToggleMic = async () => {
+        const newState = !micEnabled;
+        setMicEnabled(newState);
+        await toggleAudio(newState, selectedAudioId);
+        // If mic was re-enabled while recording, reattach recorder to the new track.
+        if (newState && isRecording && recordingStream) {
+            await reattachRecorder(recordingStream);
+        }
+    };
+
+    const handleToggleCam = async () => {
+        const newState = !camEnabled;
+        setCamEnabled(newState);
+        await toggleVideo(newState, selectedVideoId);
+        // If cam was re-enabled while recording, reattach recorder to the new track.
+        if (newState && isRecording && recordingStream) {
+            await reattachRecorder(recordingStream);
+        }
+    };
+
     const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [recordingError, setRecordingError] = useState<string | null>(null);
 
-    // Stable refs so event handlers in startRecording() close over them correctly
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const uploaderRef = useRef<MultipartUploader | null>(null);
     const recordingStartTimeRef = useRef<number>(0);
 
-    // ── Start recording ────────────────────────────────────────────────────────
+    const [showNamePrompt, setShowNamePrompt] = useState(false);
+    const [recordingNameInput, setRecordingNameInput] = useState('');
+    const recordingNameRef = useRef<string | null>(null);
+
+    // When true, the MediaRecorder onstop handler skips finalising the upload.
+    // A fresh MediaRecorder is then attached to the same live uploader session.
+    const deviceSwitchingRef = useRef(false);
+
+    // Used both by startRecording (new session) and reattachRecorder (device swap).
+    const attachMediaRecorder = useCallback((stream: MediaStream, uploader: MultipartUploader) => {
+        const videoBitsPerSecond = 8_000_000;
+        const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+        const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm';
+
+        const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond });
+        recorder.ondataavailable = (e) => { if (e.data?.size > 0) uploader.addChunk(e.data); };
+        recorder.onstop = async () => {
+            if (deviceSwitchingRef.current) {
+                // Device swap in progress — do NOT finalise. A new MediaRecorder
+                // will continue feeding chunks into the same upload session.
+                return;
+            }
+            const dur = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
+            setRecordingStatus('uploading');
+            const finalName = recordingNameRef.current || `Recording - ${new Date().toLocaleString()}`;
+            await uploader.finalise(dur, finalName);
+            recordingNameRef.current = null;
+        };
+        recorder.onerror = () => {
+            if (deviceSwitchingRef.current) return; // error expected during track swap — ignore
+            setRecordingError('MediaRecorder encountered an error.');
+            setRecordingStatus('aborted');
+            uploader.abort();
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start(5_000);
+        return recorder;
+    }, []);
+
     const startRecording = useCallback(async () => {
         if (!recordingStream) return;
-
         setRecordingStatus('starting');
         setUploadProgress(null);
         setDownloadUrl(null);
         setRecordingError(null);
 
-        // 2. Resolve codec — prefer VP9 for better compression at 4K
-        const videoBitsPerSecond = 8_000_000;
-        const mimeTypes = [
-            'video/webm;codecs=vp9',
-            'video/webm;codecs=vp8',
-            'video/webm',
-        ];
+        const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
         const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm';
-        const recorderOptions: MediaRecorderOptions = { mimeType, videoBitsPerSecond };
 
-        // 1. Initialise the uploader and open the multipart session on R2
         const uploader = new MultipartUploader({
             roomId: activeRoomId,
-            onProgress: (progress) => setUploadProgress(progress),
-            onComplete: (url) => {
-                setDownloadUrl(url);
-                setRecordingStatus('done');
-            },
+            onProgress: (p) => setUploadProgress(p),
+            onComplete: (url) => { setDownloadUrl(url); setRecordingStatus('done'); },
             onError: (err) => {
                 console.error('[Recording] Upload error:', err);
                 setRecordingError(err.message);
@@ -155,310 +256,736 @@ export const VideoCall: React.FC = () => {
         });
         uploaderRef.current = uploader;
 
-        try {
-            await uploader.start(mimeType);
-        } catch (err: any) {
+        try { await uploader.start(mimeType); }
+        catch {
             setRecordingError('Could not start upload session. Check your connection.');
             setRecordingStatus('idle');
             return;
         }
 
-        // 3. Start MediaRecorder with 5-second timeslice.
-        //    At 8 Mbps → ~5 MB per chunk, which satisfies R2's 5 MB minimum part size.
         try {
-            const recorder = new MediaRecorder(recordingStream, recorderOptions);
-
-            recorder.ondataavailable = (event) => {
-                if (event.data?.size > 0) {
-                    uploader.addChunk(event.data);
-                }
-            };
-
-            recorder.onstop = async () => {
-                const durationSeconds = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
-                setRecordingStatus('uploading');
-                await uploader.finalise(durationSeconds);
-            };
-
-            recorder.onerror = (event) => {
-                console.error('[Recording] MediaRecorder error:', event);
-                setRecordingError('MediaRecorder encountered an error.');
-                setRecordingStatus('aborted');
-                uploader.abort();
-            };
-
-            mediaRecorderRef.current = recorder;
             recordingStartTimeRef.current = Date.now();
-            recorder.start(5_000); // emit a chunk every 5 seconds
+            attachMediaRecorder(recordingStream, uploader);
             setRecordingStatus('recording');
         } catch (err: any) {
-            console.error('[Recording] Failed to create MediaRecorder:', err);
             setRecordingError('Could not start recording. Codec not supported?');
             setRecordingStatus('idle');
             uploader.abort();
         }
-    }, [recordingStream, activeRoomId]);
+    }, [recordingStream, activeRoomId, attachMediaRecorder]);
 
-    // ── Stop recording ─────────────────────────────────────────────────────────
-    const stopRecording = useCallback(() => {
+    // Stops the current MediaRecorder without finalising the upload, waits for
+    // the stream to stabilise, then starts a fresh recorder on the same uploader.
+    const reattachRecorder = useCallback(async (stream: MediaStream) => {
+        const uploader = uploaderRef.current;
+        if (!uploader) return;
+
+        deviceSwitchingRef.current = true;
         const recorder = mediaRecorderRef.current;
         if (recorder && recorder.state !== 'inactive') {
-            // onstop handler will call uploader.finalise()
+            // Request any buffered data then stop without finalising
+            recorder.requestData();
             recorder.stop();
+        }
+
+        // Give the old recorder a moment to flush and the new tracks to stabilise
+        await new Promise(resolve => setTimeout(resolve, 300));
+        deviceSwitchingRef.current = false;
+
+        // Attach a new MediaRecorder to the already-running upload session
+        attachMediaRecorder(stream, uploader);
+    }, [attachMediaRecorder]);
+
+
+    const handleStopRecordingClick = useCallback(() => {
+        setRecordingNameInput(`Recording - ${new Date().toLocaleString()}`);
+        setShowNamePrompt(true);
+    }, []);
+
+    const confirmStopRecording = useCallback(() => {
+        recordingNameRef.current = recordingNameInput;
+        setShowNamePrompt(false);
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
+    }, [recordingNameInput]);
+
+
+    const pauseRecording = useCallback(() => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state === 'recording') {
+            recorder.pause();
+            setRecordingStatus('paused');
         }
     }, []);
 
-    // ── Hang up ────────────────────────────────────────────────────────────────
-    const handleHangUp = useCallback(() => {
-        // If recording is active, stop the recorder gracefully but abort the upload
-        // (the user explicitly left — don't silently finish a long upload in the BG)
+    const resumeRecording = useCallback(() => {
         const recorder = mediaRecorderRef.current;
-        if (recorder && recorder.state !== 'inactive') {
-            recorder.stop();
+        if (recorder && recorder.state === 'paused') {
+            recorder.resume();
+            setRecordingStatus('recording');
         }
+    }, []);
+
+    const handleHangUp = useCallback(() => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
         uploaderRef.current?.abort();
         setRecordingStatus('aborted');
-
         endCall();
         setHasStarted(false);
-    }, [endCall]);
+        navigate('/');
+    }, [endCall, navigate]);
 
-    // ── Local fallback download ────────────────────────────────────────────────
-    // If the upload succeeds the user gets the cloud URL.
-    // If it fails / they abort, this is not available since we no longer buffer
-    // in RAM — it's a deliberate tradeoff. If offline-first support matters,
-    // keep the legacy blob approach as a parallel path.
-
-    // ── Misc UI ────────────────────────────────────────────────────────────────
     const handleStart = async () => {
         try {
             await initialize();
             setHasStarted(true);
         } catch (err: any) {
             console.error('Failed to initialize WebRTC', err);
-            alert(
-                `Hardware Access Denied: ${err.message}\n\nNote: Mobile browsers require HTTPS to access cameras/microphones.`
-            );
+            alert(`Hardware Access Denied: ${err.message}\n\nNote: Mobile browsers require HTTPS to access cameras/microphones.`);
         }
     };
 
-    // The start button is disabled while TURN credentials are being fetched
-    // to ensure the first peer connection is created with the correct iceServers.
-    const startDisabled = turnLoading;
-
-    const streamsMap = Object.entries(remoteStreams);
     const inviteLink = `${window.location.origin}/room/${activeRoomId}`;
     const [linkCopied, setLinkCopied] = useState(false);
-
     const copyInviteLink = async () => {
-        try {
-            await navigator.clipboard.writeText(inviteLink);
-        } catch {
+        try { await navigator.clipboard.writeText(inviteLink); }
+        catch {
             const el = document.createElement('textarea');
             el.value = inviteLink;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
+            document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
         }
         setLinkCopied(true);
         setTimeout(() => setLinkCopied(false), 2000);
     };
 
-    // ── Derived UI flags ───────────────────────────────────────────────────────
+    const [chatOpen, setChatOpen] = useState(false);
+    const [chatMessages] = useState([
+        { from: 'System', time: 'Now', text: 'End-to-end encrypted session active.' },
+    ]);
+    const [chatInput, setChatInput] = useState('');
+
+    const [activePeerId, setActivePeerId] = useState<string | null>(null);
+    useEffect(() => {
+        if (!hasStarted) return;
+        const peerIds = Object.keys(remoteStreams);
+        if (peerIds.length === 0) return;
+        const interval = setInterval(() => {
+            const random = peerIds[Math.floor(Math.random() * peerIds.length)];
+            setActivePeerId(random);
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [remoteStreams, hasStarted]);
+
     const isRecording = recordingStatus === 'recording';
+    const isPaused = recordingStatus === 'paused';
     const isFinishing = recordingStatus === 'stopping' || recordingStatus === 'uploading';
     const isDone = recordingStatus === 'done';
     const isIdle = recordingStatus === 'idle' || recordingStatus === 'aborted';
+    const startDisabled = turnLoading;
 
-    // Progress label shown on the control bar while parts stream up
+    const streamsMap = Object.entries(remoteStreams);
     const progressLabel = uploadProgress
         ? `${uploadProgress.partsUploaded} / ${uploadProgress.partsTotal} parts · ${Math.round(uploadProgress.bytesUploaded / 1_048_576)} MB`
         : 'Finalising…';
 
     return (
-        <div className="min-h-screen bg-surface">
-            {/* Header */}
-            <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-midnight/5 shadow-sm">
-                <div className="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/')}>
-                        <span className="text-xl font-bold tracking-tight text-midnight font-headline">
-                            ArchitectSaaS
+        <div style={{ minHeight: '100vh', background: 'var(--surface-gray)', overflow: 'hidden' }}>
+
+            {/* ── Top Nav ──────────────────────────────────────────────────── */}
+            <header style={{
+                position: 'sticky', top: 0, zIndex: 50, width: '100%',
+                background: 'var(--surface-container-lowest)',
+                borderBottom: '1px solid var(--border-subtle)',
+                height: '80px',
+            }}>
+                <div style={{
+                    maxWidth: 'var(--container-max)', margin: '0 auto',
+                    padding: '0 40px', height: '100%',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                    {/* Brand + nav */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                        <span
+                            className="type-display-lg"
+                            style={{ fontSize: '28px', cursor: 'pointer', letterSpacing: '-0.02em' }}
+                            onClick={() => navigate('/')}
+                        >
+                            Lakeside
                         </span>
-                        <span className="px-3 py-1 bg-red-500/10 text-red-600 rounded-full text-xs uppercase tracking-widest font-bold">
-                            Live Studio
-                        </span>
+                        <nav style={{ display: 'flex', gap: '32px' }}>
+                            <a href="#" className="type-button" style={{
+                                color: 'var(--primary)', textDecoration: 'none',
+                                borderBottom: '2px solid var(--vibrant-lime)', paddingBottom: '4px',
+                            }}>Active Call</a>
+                            {['Meetings', 'Library'].map((l) => (
+                                <a key={l} href="#" className="type-button" style={{ color: 'var(--on-surface-variant)', textDecoration: 'none' }}>{l}</a>
+                            ))}
+                        </nav>
                     </div>
 
-                    <button
-                        onClick={copyInviteLink}
-                        title="Click to copy invite link"
-                        className={`flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all select-none ${linkCopied
-                                ? 'bg-primary/10 border-primary/30 text-primary'
-                                : 'bg-surface-low border-midnight/8 text-midnight hover:border-primary/25 hover:text-primary hover:bg-primary/5'
-                            }`}
-                    >
-                        {linkCopied ? (
-                            <>
-                                <Check className="w-3.5 h-3.5 shrink-0" />
-                                <span>Copied!</span>
-                            </>
-                        ) : (
-                            <>
-                                <Link2 className="w-3.5 h-3.5 shrink-0" />
-                                <span className="font-mono max-w-[180px] sm:max-w-[260px] truncate">
-                                    {inviteLink}
-                                </span>
-                            </>
-                        )}
-                    </button>
+                    {/* Right controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        {/* Invite link */}
+                        <button
+                            onClick={copyInviteLink}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: linkCopied ? 'var(--vibrant-lime)' : 'var(--on-surface-variant)',
+                                fontFamily: 'var(--font-label)', fontSize: '12px', fontWeight: 500,
+                                letterSpacing: '0.05em',
+                            }}
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                {linkCopied ? 'check_circle' : 'link'}
+                            </span>
+                            {linkCopied ? 'Copied!' : 'Invite'}
+                        </button>
+
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
+                            <span className="material-symbols-outlined">notifications</span>
+                        </button>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
+                            <span className="material-symbols-outlined">settings</span>
+                        </button>
+                        <div style={{
+                            width: '40px', height: '40px', borderRadius: '50%',
+                            background: 'var(--surface-container-highest)',
+                            border: '1px solid var(--border-subtle)',
+                            overflow: 'hidden',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontFamily: 'var(--font-label)', fontSize: '12px',
+                        }}>
+                            {user?.name?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                    </div>
                 </div>
             </header>
 
-            <main className="flex flex-col items-center pt-28 px-6 font-sans pb-32">
-                <div className="w-full max-w-7xl relative">
-
-                    {/* Recording indicator */}
-                    {isRecording && (
-                        <div className="absolute -top-12 right-0 z-10 flex items-center gap-3 bg-red-500 rounded-full px-4 py-1.5 shadow-lg shadow-red-500/30">
-                            <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                            <span className="text-xs font-bold tracking-widest text-white uppercase">
-                                Recording · Streaming to Cloud
-                            </span>
-                            {uploadProgress && (
-                                <span className="text-xs text-white/80 font-mono">
-                                    {Math.round(uploadProgress.bytesUploaded / 1_048_576)} MB uploaded
-                                </span>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Upload finishing indicator */}
-                    {isFinishing && (
-                        <div className="absolute -top-12 right-0 z-10 flex items-center gap-3 bg-primary rounded-full px-4 py-1.5 shadow-lg shadow-primary/30 animate-pulse">
-                            <div className="w-2 h-2 rounded-full bg-white" />
-                            <span className="text-xs font-bold tracking-widest text-white uppercase">
-                                {progressLabel}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Error banner */}
-                    {recordingError && (
-                        <div className="absolute -top-12 right-0 z-10 flex items-center gap-2 bg-red-100 border border-red-200 text-red-700 rounded-full px-4 py-1.5">
-                            <span className="text-xs font-bold">⚠ {recordingError}</span>
-                        </div>
-                    )}
-
-                    {/* Video grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-max relative z-0">
-                        <VideoPlayer stream={localStream} isLocal label="You (Local Host)" />
-
-                        {hasStarted && streamsMap.length === 0 && (
-                            <VideoPlayer stream={null} label="Waiting..." />
-                        )}
-
-                        {streamsMap.map(([peerId, stream]) => (
-                            <VideoPlayer
-                                key={peerId}
-                                stream={stream}
-                                label={`Peer: ${peerId.substring(0, 5)}`}
-                            />
-                        ))}
+            {/* ── Main ─────────────────────────────────────────────────────── */}
+            <main
+                style={{
+                    position: 'relative',
+                    height: 'calc(100vh - 80px)',
+                    width: '100%',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingBottom: '128px',
+                }}
+            >
+                {/* TURN warning */}
+                {turnError && (
+                    <div style={{
+                        position: 'absolute', top: '24px',
+                        background: '#fffbeb', border: '1px solid #f59e0b',
+                        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px',
+                        zIndex: 20,
+                    }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#d97706' }}>warning</span>
+                        <span className="type-label-sm" style={{ color: '#92400e', textTransform: 'uppercase' }}>
+                            TURN unavailable — STUN only (local network only)
+                        </span>
                     </div>
+                )}
+
+                {/* Recording indicator */}
+                {(isRecording || isPaused) && (
+                    <div style={{
+                        position: 'absolute', top: '24px', right: '24px', zIndex: 20,
+                        background: isPaused ? 'var(--surface-container-highest)' : 'var(--primary)', 
+                        color: isPaused ? 'var(--on-surface)' : '#fff',
+                        border: isPaused ? '1px solid var(--border-subtle)' : 'none',
+                        padding: '6px 16px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                    }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--error)', animation: isPaused ? 'none' : 'speaking-pulse 1s infinite' }} />
+                        <span className="type-label-sm" style={{ textTransform: 'uppercase' }}>
+                            {isPaused ? 'REC · Paused' : 'REC · Streaming'}
+                            {uploadProgress && ` · ${Math.round(uploadProgress.bytesUploaded / 1_048_576)} MB`}
+                        </span>
+                    </div>
+                )}
+
+                {/* Uploading indicator */}
+                {isFinishing && (
+                    <div style={{
+                        position: 'absolute', top: '24px', right: '24px', zIndex: 20,
+                        background: 'var(--primary)', color: '#fff',
+                        padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px',
+                    }}>
+                        <div style={{
+                            width: '8px', height: '8px', borderRadius: '50%',
+                            border: '2px solid #fff', borderTopColor: 'transparent',
+                            animation: 'spin 0.8s linear infinite',
+                        }} />
+                        <span className="type-label-sm" style={{ textTransform: 'uppercase' }}>{progressLabel}</span>
+                    </div>
+                )}
+
+                {/* Error banner */}
+                {recordingError && (
+                    <div style={{
+                        position: 'absolute', top: '24px', right: '24px', zIndex: 20,
+                        background: 'var(--error-container)', border: '1px solid var(--error)',
+                        padding: '6px 16px',
+                    }}>
+                        <span className="type-label-sm" style={{ color: 'var(--on-error-container)', textTransform: 'uppercase' }}>
+                            ⚠ {recordingError}
+                        </span>
+                    </div>
+                )}
+
+                {/* Done — download link */}
+                {isDone && downloadUrl && (
+                    <div style={{
+                        position: 'absolute', top: '24px', right: '24px', zIndex: 20,
+                        background: 'var(--vibrant-lime)', border: '1px solid var(--primary)',
+                        padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px',
+                    }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check_circle</span>
+                        <a
+                            href={downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="type-label-sm"
+                            style={{ color: 'var(--primary)', textTransform: 'uppercase', textDecoration: 'none' }}
+                        >
+                            VIEW RECORDING ↗
+                        </a>
+                        <button
+                            onClick={() => { setDownloadUrl(null); setRecordingStatus('idle'); setUploadProgress(null); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--primary)', marginLeft: '8px' }}
+                            title="Dismiss"
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                        </button>
+                    </div>
+                )}
+
+                {/* ── Video Grid ─────────────────────────────────────────── */}
+                <div
+                    id="video-grid"
+                    style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '24px',
+                        width: '100%',
+                        maxWidth: 'var(--container-max)',
+                        justifyContent: 'center',
+                    }}
+                >
+                    {/* Local tile */}
+                    <VideoTile
+                        stream={localStream}
+                        isLocal
+                        label={user?.name || 'You'}
+                        isActive={!hasStarted}
+                        chip={hasStarted ? 'HD' : null}
+                        isMuted={!micEnabled}
+                        isCamOff={!camEnabled}
+                    />
+
+                    {/* Remote tiles */}
+                    {streamsMap.map(([peerId, stream], idx) => (
+                        <VideoTile
+                            key={peerId}
+                            stream={stream}
+                            label={`Peer ${peerId.substring(0, 5)}`}
+                            isActive={activePeerId === peerId}
+                            isMuted={idx % 3 === 2}
+                            chip={idx === 0 ? 'REC' : null}
+                        />
+                    ))}
+
+                    {/* Waiting placeholder */}
+                    {hasStarted && streamsMap.length === 0 && (
+                        <div style={{
+                            flex: 1, minWidth: '260px', aspectRatio: '16/9',
+                            background: 'var(--primary-container)',
+                            border: '1px solid var(--primary)',
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center', gap: '16px',
+                        }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--on-primary-container)' }}>person_add</span>
+                            <p className="type-label-sm" style={{ color: 'var(--on-primary-container)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Waiting for peers…
+                            </p>
+                            <button
+                                onClick={copyInviteLink}
+                                className="type-label-sm"
+                                style={{
+                                    background: 'none', border: '1px solid var(--on-primary-container)',
+                                    color: 'var(--on-primary-container)', cursor: 'pointer',
+                                    padding: '8px 16px', textTransform: 'uppercase', letterSpacing: '0.05em',
+                                }}
+                            >
+                                {linkCopied ? '✓ Copied' : 'Copy Invite Link'}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {/* Control bar */}
-                <div className="flex flex-wrap items-center justify-center gap-4 fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl p-3 pr-4 rounded-2xl border border-midnight/10 shadow-2xl shadow-primary/10 z-50">
-                    {/* TURN fallback warning — shown non-intrusively when credentials fetch failed */}
-                    {turnError && (
-                        <div className="absolute -top-12 left-0 z-10 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-4 py-1.5">
-                            <span className="text-xs font-bold">⚠ TURN unavailable — STUN only (local networks only)</span>
-                        </div>
-                    )}
+                {/* ── Floating Control Bar ──────────────────────────────── */}
+                <div
+                    className="glass-control"
+                    style={{
+                        position: 'fixed', bottom: '40px',
+                        left: '50%', transform: 'translateX(-50%)',
+                        zIndex: 50,
+                        padding: '16px 32px',
+                        display: 'flex', alignItems: 'center', gap: '40px',
+                    }}
+                >
                     {!hasStarted ? (
+                        /* ── Pre-call start button ── */
                         <button
                             id="start-call-btn"
                             onClick={handleStart}
                             disabled={startDisabled}
-                            title={turnLoading ? 'Fetching TURN credentials…' : 'Start Hardware & Enter Call'}
-                            className="emerald-gradient text-white font-bold px-10 py-4 rounded-xl text-md flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100"
+                            className="btn-action"
+                            style={{
+                                padding: '16px 48px',
+                                opacity: startDisabled ? 0.6 : 1,
+                                cursor: startDisabled ? 'not-allowed' : 'pointer',
+                            }}
                         >
                             {turnLoading && (
-                                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px', animation: 'spin 1s linear infinite' }}>autorenew</span>
                             )}
-                            {turnLoading ? 'Preparing…' : 'Start Hardware & Enter Call'}
+                            {turnLoading ? 'Preparing…' : 'Start Call'}
                         </button>
                     ) : (
                         <>
-                            {/* Hang up */}
-                            <button
-                                onClick={handleHangUp}
-                                className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold px-8 py-4 rounded-xl text-md flex items-center justify-center active:scale-95 transition-all"
-                            >
-                                Leave Call
-                            </button>
+                            {/* Media controls group */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                                <ControlBtn icon={micEnabled ? 'mic' : 'mic_off'} label={micEnabled ? 'Mute' : 'Unmute'} onClick={handleToggleMic} active={!micEnabled} />
+                                <ControlBtn icon={camEnabled ? 'videocam' : 'videocam_off'} label={camEnabled ? 'Camera Off' : 'Camera On'} onClick={handleToggleCam} active={!camEnabled} />
+                                <ControlBtn icon="present_to_all" label="Share" />
+                                <ControlBtn icon="chat_bubble" label="Chat" onClick={() => setChatOpen(!chatOpen)} active={chatOpen} />
+                                <ControlBtn icon="settings" label="Settings" onClick={() => setSettingsOpen(true)} />
+                            </div>
 
-                            {recordingStream && <div className="h-8 w-px bg-midnight/10 mx-2" />}
+                            {/* Divider */}
+                            <div style={{ width: '1px', height: '32px', background: 'var(--border-subtle)' }} />
 
-                            {/* Start recording — only shown when idle */}
+                            {/* Recording controls */}
                             {recordingStream && isIdle && (
                                 <button
                                     onClick={startRecording}
-                                    className="bg-white border border-midnight/10 text-midnight font-bold px-6 py-4 rounded-xl text-md flex items-center justify-center gap-2 hover:bg-surface-low transition-all"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        fontFamily: 'var(--font-label)', fontSize: '12px', fontWeight: 500,
+                                        color: 'var(--on-surface-variant)', letterSpacing: '0.05em',
+                                    }}
                                 >
-                                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse border border-white/50" />
-                                    Record & Stream
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--error)' }} />
+                                    RECORD
                                 </button>
                             )}
-
-                            {/* Stop recording */}
                             {isRecording && (
                                 <button
-                                    onClick={stopRecording}
-                                    className="bg-red-600 text-white font-bold px-6 py-4 rounded-xl text-md flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all"
+                                    onClick={pauseRecording}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        fontFamily: 'var(--font-label)', fontSize: '12px', fontWeight: 500,
+                                        color: 'var(--error)', letterSpacing: '0.05em',
+                                    }}
                                 >
-                                    <div className="w-3 h-3 rounded-sm bg-white" />
-                                    Stop Recording
+                                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>pause</span>
+                                    PAUSE
+                                </button>
+                            )}
+                            {isPaused && (
+                                <button
+                                    onClick={resumeRecording}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        fontFamily: 'var(--font-label)', fontSize: '12px', fontWeight: 500,
+                                        color: 'var(--error)', letterSpacing: '0.05em',
+                                    }}
+                                >
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--error)' }} />
+                                    RESUME
+                                </button>
+                            )}
+                            {(isRecording || isPaused) && (
+                                <button
+                                    onClick={handleStopRecordingClick}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        fontFamily: 'var(--font-label)', fontSize: '12px', fontWeight: 500,
+                                        color: 'var(--error)', letterSpacing: '0.05em',
+                                    }}
+                                >
+                                    <div style={{ width: '8px', height: '8px', background: 'var(--error)' }} />
+                                    STOP REC
                                 </button>
                             )}
 
-                            {/* In-flight status pill */}
-                            {isFinishing && (
-                                <div className="bg-primary/10 border border-primary/20 text-primary font-bold px-6 py-4 rounded-xl text-md flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                                    {progressLabel}
-                                </div>
-                            )}
+                            {/* Divider */}
+                            <div style={{ width: '1px', height: '32px', background: 'var(--border-subtle)' }} />
 
-                            {/* Done — open in recordings library */}
-                            {isDone && downloadUrl && (
-                                <>
-                                    <div className="h-8 w-px bg-midnight/10 mx-2" />
-                                    <a
-                                        href={downloadUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="emerald-gradient text-white font-bold px-6 py-4 rounded-xl text-md flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-all"
-                                        onClick={() => {
-                                            // Reset so the user can record again
-                                            setTimeout(() => {
-                                                setDownloadUrl(null);
-                                                setRecordingStatus('idle');
-                                                setUploadProgress(null);
-                                            }, 500);
-                                        }}
-                                    >
-                                        <Check className="w-4 h-4" />
-                                        View Recording ↗
-                                    </a>
-                                </>
-                            )}
+                            {/* Leave */}
+                            <button
+                                onClick={handleHangUp}
+                                className="btn-primary"
+                                style={{
+                                    padding: '10px 24px',
+                                    background: 'var(--error)',
+                                    borderColor: 'var(--error)',
+                                    letterSpacing: '0.1em',
+                                }}
+                            >
+                                Leave Call
+                            </button>
                         </>
                     )}
                 </div>
             </main>
+
+            {/* ── Chat Sidebar ──────────────────────────────────────────────── */}
+            <aside
+                className={`chat-sidebar${chatOpen ? ' open' : ''}`}
+                style={{
+                    position: 'fixed', right: 0, top: '80px',
+                    height: 'calc(100vh - 80px)',
+                    width: '320px',
+                    background: 'var(--surface)',
+                    borderLeft: '1px solid var(--border-subtle)',
+                    zIndex: 40,
+                    display: 'flex', flexDirection: 'column',
+                }}
+            >
+                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {/* Chat header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+                        <h3 className="type-headline-md" style={{ fontSize: '20px', textTransform: 'uppercase', letterSpacing: '-0.02em' }}>
+                            In-Call Messages
+                        </h3>
+                        <button
+                            onClick={() => setChatOpen(false)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)' }}
+                        >
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+
+                    {/* Messages */}
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        {chatMessages.map((msg, i) => (
+                            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>
+                                    {msg.from} · {msg.time}
+                                </p>
+                                <p className="type-body-md" style={{
+                                    background: 'var(--surface-container-low)',
+                                    padding: '12px',
+                                    borderLeft: '2px solid var(--primary)',
+                                }}>
+                                    {msg.text}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Input */}
+                    <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border-subtle)' }}>
+                        <input
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Send a message…"
+                            className="input-underline type-label-sm"
+                            style={{ fontSize: '12px', letterSpacing: '0.05em' }}
+                        />
+                    </div>
+                </div>
+            </aside>
+
+            {/* ── Settings Modal ─────────────────────────────────────────────── */}
+            {settingsOpen && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 100,
+                    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: 'var(--surface-container-highest)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '16px', padding: '32px', width: '400px',
+                        display: 'flex', flexDirection: 'column', gap: '24px',
+                        boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
+                    }}>
+                        <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 className="type-headline-md" style={{ color: 'var(--on-surface)' }}>Device Settings</h3>
+                            <button onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface)' }}>
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>Microphone</label>
+                            <select 
+                                value={selectedAudioId}
+                                onChange={async (e) => {
+                                    setSelectedAudioId(e.target.value);
+                                    await changeDevice(e.target.value, 'audioinput');
+                                    // If recording, reattach the MediaRecorder to the new track
+                                    // WITHOUT finalising the upload — seamless single file.
+                                    if ((isRecording || isPaused) && recordingStream) {
+                                        await reattachRecorder(recordingStream);
+                                    }
+                                }}
+                                style={{
+                                    padding: '12px', background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                                    color: 'var(--on-surface)', borderRadius: '8px', fontFamily: 'var(--font-body)',
+                                    outline: 'none', cursor: 'pointer',
+                                }}
+                            >
+                                {devices.filter(d => d.kind === 'audioinput').map(d => (
+                                    <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone (${d.deviceId.slice(0, 5)})`}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>Camera</label>
+                            <select 
+                                value={selectedVideoId}
+                                onChange={async (e) => {
+                                    setSelectedVideoId(e.target.value);
+                                    await changeDevice(e.target.value, 'videoinput');
+                                    // If recording, reattach the MediaRecorder to the new track
+                                    // WITHOUT finalising the upload — seamless single file.
+                                    if ((isRecording || isPaused) && recordingStream) {
+                                        await reattachRecorder(recordingStream);
+                                    }
+                                }}
+                                style={{
+                                    padding: '12px', background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                                    color: 'var(--on-surface)', borderRadius: '8px', fontFamily: 'var(--font-body)',
+                                    outline: 'none', cursor: 'pointer',
+                                }}
+                            >
+                                {devices.filter(d => d.kind === 'videoinput').map(d => (
+                                    <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera (${d.deviceId.slice(0, 5)})`}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Name Prompt Modal ─────────────────────────────────────────────── */}
+            {showNamePrompt && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 100,
+                    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: 'var(--surface-container-highest)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '16px', padding: '32px', width: '400px',
+                        display: 'flex', flexDirection: 'column', gap: '24px',
+                        boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
+                    }}>
+                        <h3 className="type-headline-md" style={{ color: 'var(--on-surface)' }}>Name Your Recording</h3>
+                        <p className="type-body-md" style={{ color: 'var(--on-surface-variant)' }}>
+                            Give this recording a name so you can easily find it later.
+                        </p>
+                        <input
+                            autoFocus
+                            value={recordingNameInput}
+                            onChange={(e) => setRecordingNameInput(e.target.value)}
+                            className="input-base"
+                            style={{ padding: '12px', background: 'var(--surface)', border: '1px solid var(--border-subtle)', color: 'var(--on-surface)', borderRadius: '8px' }}
+                            placeholder="e.g. Weekly Sync"
+                        />
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowNamePrompt(false)}
+                                className="btn-secondary"
+                                style={{ padding: '12px 24px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmStopRecording}
+                                className="btn-primary"
+                                style={{ padding: '12px 24px' }}
+                            >
+                                Save & Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Spinner keyframe (inline) */}
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
+    );
+};
+
+
+const ControlBtn: React.FC<{
+    icon: string;
+    label: string;
+    active?: boolean;
+    onClick?: () => void;
+}> = ({ icon, label, active, onClick }) => {
+    const [hovered, setHovered] = useState(false);
+
+    return (
+        <button
+            onClick={onClick}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            style={{
+                width: '48px', height: '48px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'none', border: 'none', cursor: 'pointer',
+                position: 'relative',
+                transform: hovered ? 'scale(1.1)' : 'scale(1)',
+                transition: 'transform 0.15s',
+            }}
+            title={label}
+        >
+            <span
+                className="material-symbols-outlined"
+                style={{
+                    fontSize: '28px',
+                    color: active ? 'var(--vibrant-lime)' : 'var(--on-surface)',
+                    fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
+                }}
+            >
+                {icon}
+            </span>
+            {/* Tooltip */}
+            {hovered && (
+                <span
+                    className="type-label-sm"
+                    style={{
+                        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                        background: 'var(--primary)', color: '#fff',
+                        padding: '4px 8px',
+                        whiteSpace: 'nowrap', marginBottom: '8px', fontSize: '10px',
+                        textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}
+                >
+                    {label}
+                </span>
+            )}
+        </button>
     );
 };
 

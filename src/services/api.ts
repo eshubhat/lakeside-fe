@@ -12,7 +12,6 @@ export const api = axios.create({
   withCredentials: true, // Securely attaches the HttpOnly `/auth/refresh` cookies sequentially across CORS natively
 });
 
-// ─── Request Interceptor ──────────────────────────────────────────────────────
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (memoryToken && config.headers) {
     config.headers.Authorization = `Bearer ${memoryToken}`;
@@ -20,7 +19,6 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 }, (error: any) => Promise.reject(error));
 
-// ─── Response Interceptor ─────────────────────────────────────────────────────
 let isRefreshing = false;
 let failedQueue: any[] = [];
 

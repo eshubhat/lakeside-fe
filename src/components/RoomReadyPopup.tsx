@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Copy, Check, Share2, ArrowRight, Video } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 interface RoomReadyPopupProps {
   isOpen: boolean;
@@ -11,7 +10,6 @@ interface RoomReadyPopupProps {
 
 export default function RoomReadyPopup({ isOpen, roomId, onEnterRoom }: RoomReadyPopupProps) {
   const [copied, setCopied] = useState(false);
-  const navigate = useNavigate();
 
   const handleCopy = async () => {
     const roomUrl = `${window.location.origin}/room/${roomId}`;

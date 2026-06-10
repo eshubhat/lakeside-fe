@@ -1,7 +1,7 @@
 {
   "name": "riverside-frontend",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
     "@react-oauth/google": "^0.13.4",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.13.6",
