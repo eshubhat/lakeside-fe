@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api, setMemoryToken } from '../../services/api';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
@@ -7,10 +7,13 @@ import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, token } = useAuth();
 
+  const from = location.state?.from?.pathname + (location.state?.from?.search || '') || '/';
+
   // Already logged in → go home
-  if (token) return <Navigate to="/" replace />;
+  if (token) return <Navigate to={from} replace />;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +28,7 @@ const Login: React.FC = () => {
       const { data } = await api.post('/auth/login', { email, password });
       setMemoryToken(data.token);
       login(data.user, data.token);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Login failed. Check your credentials.');
     } finally {
@@ -42,7 +45,7 @@ const Login: React.FC = () => {
       const { token, user } = response.data;
       setMemoryToken(token);
       login(user, token);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Google authentication failed.');
     } finally {
@@ -204,7 +207,7 @@ const Login: React.FC = () => {
             Don't have an account?{' '}
             <a
               href="/signup"
-              onClick={(e) => { e.preventDefault(); navigate('/signup'); }}
+              onClick={(e) => { e.preventDefault(); navigate('/signup', { state: { from: location.state?.from } }); }}
               style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'underline', textDecorationColor: 'var(--vibrant-lime)', textDecorationThickness: '2px', textUnderlineOffset: '4px' }}
             >
               Register Now

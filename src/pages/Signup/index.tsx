@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { api, setMemoryToken } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
@@ -7,10 +7,13 @@ import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 
 const Signup: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signup, token } = useAuth();
 
+  const from = location.state?.from?.pathname + (location.state?.from?.search || '') || '/';
+
   // Already logged in → go home
-  if (token) return <Navigate to="/" replace />;
+  if (token) return <Navigate to={from} replace />;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -31,7 +34,7 @@ const Signup: React.FC = () => {
       const { data } = await api.post('/auth/signup', { name, email, password });
       setMemoryToken(data.token);
       signup(data.user, data.token);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -48,7 +51,7 @@ const Signup: React.FC = () => {
       const { token, user } = response.data;
       setMemoryToken(token);
       signup(user, token);
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Google authentication failed.');
     } finally {
@@ -207,7 +210,7 @@ const Signup: React.FC = () => {
             <span className="type-body-md" style={{ color: 'var(--on-surface-variant)' }}>Already have an account?</span>
             <a
               href="/login"
-              onClick={(e) => { e.preventDefault(); navigate('/login'); }}
+              onClick={(e) => { e.preventDefault(); navigate('/login', { state: { from: location.state?.from } }); }}
               className="type-button"
               style={{
                 color: 'var(--primary)',
