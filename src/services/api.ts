@@ -74,6 +74,7 @@ api.interceptors.response.use(
         // Wipe isolated properties identically enforcing secure session boundaries uniformly
         setMemoryToken(null);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
 
         const toast = document.createElement('div');
         toast.textContent = '⚠️ Secure Session expired — verification re-authentication required.';

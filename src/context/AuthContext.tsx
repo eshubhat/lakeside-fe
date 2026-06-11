@@ -27,24 +27,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [token, setToken] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [token, setToken] = useState<string | null>(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) setMemoryToken(savedToken);
+    return savedToken;
+  });
+  const [isInitializing, setIsInitializing] = useState(false);
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    // Asynchronously try to refresh the token in the background just in case it's nearing expiration,
+    // but don't block the UI rendering on it, and don't wipe the session if it fails 
+    // (since the access token is stored in localStorage now).
+    const backgroundRefresh = async () => {
       try {
         const { data } = await api.post('/auth/refresh');
-        setToken(data.token);
-        setMemoryToken(data.token);
+        if (data.token) {
+          setToken(data.token);
+          setMemoryToken(data.token);
+          localStorage.setItem('token', data.token);
+        }
       } catch (error) {
-        // If the cookie is expired/missing on boot, simply act as unauthenticated natively
-        setToken(null);
-        setMemoryToken(null);
-      } finally {
-        setIsInitializing(false);
+        // Ignore refresh failure on boot, we have the local token.
       }
     };
-    initializeAuth();
+    if (token) backgroundRefresh();
   }, []);
 
   const login = (userData: User, authToken: string) => {
@@ -52,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(authToken);
     setMemoryToken(authToken);
     localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('token', authToken);
   };
 
   const signup = (userData: User, authToken: string) => {
@@ -68,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setMemoryToken(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   if (isInitializing) {
