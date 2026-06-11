@@ -922,6 +922,11 @@ input[type=range].preview-scrubber::-webkit-slider-thumb {
 .file-queue-item:hover { border-color: var(--primary); }
 .file-queue-item + .file-queue-item { margin-top: 6px; }
 
+/* ─── Mobile Helpers ─────────────────────────────────────────────────────── */
+.mobile-bottom-nav { display: none; } /* Hidden on desktop */
+.profile-dropdown-mobile-info { display: none; } /* Hidden on desktop */
+
+
 /* ─── Responsive Layouts ─────────────────────────────────────────────────── */
 
 .home-layout {
@@ -992,28 +997,72 @@ input[type=range].preview-scrubber::-webkit-slider-thumb {
 }
 
 @media (max-width: 768px) {
-  .home-layout { flex-direction: column; }
+  .home-layout { flex-direction: column; padding-bottom: 80px; } /* Add padding for bottom nav */
   .home-sidebar {
-    width: 100%;
-    min-width: unset;
-    height: auto;
-    position: relative;
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 24px 16px;
+    display: none; /* Hide left nav bar completely on mobile */
   }
   .home-main {
     margin-left: 0;
     padding: 24px 16px;
+    min-height: auto;
   }
   .home-bento-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
   }
   .home-bento-instant,
   .home-bento-join,
   .home-bento-feature {
-    grid-column: span 1;
+    width: 100%;
+  }
+  
+  /* Mobile Bottom Navigation */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 80px;
+    background: var(--surface-container-lowest);
+    border-top: 1px solid var(--border-subtle);
+    z-index: 100;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 16px;
+  }
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--on-surface-variant);
+    text-decoration: none;
+    font-family: var(--font-label);
+    font-size: 10px;
+  }
+  .mobile-nav-item.active { color: var(--primary); }
+  .mobile-nav-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--vibrant-lime);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(166,228,46,0.4);
+    transform: translateY(-16px);
+    border: 1px solid var(--primary);
+  }
+
+  /* Profile header adjustments */
+  .profile-info-text {
+    display: none;
+  }
+  .profile-dropdown-mobile-info {
+    display: block;
   }
   
   .room-entry-layout {

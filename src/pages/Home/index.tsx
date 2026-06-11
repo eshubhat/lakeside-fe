@@ -110,7 +110,7 @@ const Home: React.FC = () => {
               style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }}
               onClick={() => setShowDropdown(!showDropdown)}
             >
-              <div style={{ textAlign: 'right' }}>
+              <div className="profile-info-text" style={{ textAlign: 'right' }}>
                 <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
                 <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
               </div>
@@ -132,6 +132,10 @@ const Home: React.FC = () => {
                 borderRadius: '8px', padding: '8px', zIndex: 10, minWidth: '150px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
               }}>
+                <div className="profile-dropdown-mobile-info" style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '8px' }}>
+                  <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
+                  <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
+                </div>
                 <button
                   onClick={logout}
                   style={{
@@ -306,6 +310,32 @@ const Home: React.FC = () => {
           </div>
         </footer>
       </main>
+
+      {/* ── Mobile Bottom Navigation ───────────────────────────────────── */}
+      <nav className="mobile-bottom-nav">
+        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="mobile-nav-item active">
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
+          Dashboard
+        </a>
+        <a href="/history" onClick={(e) => { e.preventDefault(); navigate('/history'); }} className="mobile-nav-item">
+          <span className="material-symbols-outlined">history</span>
+          History
+        </a>
+        
+        {/* Floating Action Button for New Meeting */}
+        <button onClick={handleStartInstant} className="mobile-nav-fab" aria-label="New Meeting">
+          <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+        </button>
+        
+        <a href="/editor" onClick={(e) => { e.preventDefault(); navigate('/editor'); }} className="mobile-nav-item">
+          <span className="material-symbols-outlined">movie_edit</span>
+          Editor
+        </a>
+        <button onClick={logout} className="mobile-nav-item" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+          <span className="material-symbols-outlined">logout</span>
+          Sign Out
+        </button>
+      </nav>
     </div>
   );
 };
