@@ -125,6 +125,20 @@ export const useWebRTC = (
     iceCandidateQueues.current.delete(peerId);
   }, []);
 
+  const removePeerConnection = useCallback((peerId: string) => {
+    const pc = peerConnections.current.get(peerId);
+    if (pc) {
+      pc.close();
+      peerConnections.current.delete(peerId);
+    }
+    iceCandidateQueues.current.delete(peerId);
+    setRemoteStreams((prev) => {
+      const updated = { ...prev };
+      delete updated[peerId];
+      return updated;
+    });
+  }, []);
+
   const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
     const resolvedIceServers = iceServers ?? STUN_FALLBACK;
     const pc = new RTCPeerConnection({ iceServers: resolvedIceServers });
@@ -141,12 +155,15 @@ export const useWebRTC = (
 
     pc.ontrack = (event) => {
       console.log(`[WebRTC] Received remote track from ${peerId}`);
-      const inboundStream = event.streams?.[0] ?? (() => {
-        const s = new MediaStream();
-        s.addTrack(event.track);
-        return s;
-      })();
-      setRemoteStreams((prev) => ({ ...prev, [peerId]: inboundStream }));
+      setRemoteStreams((prev) => {
+        let newStream = event.streams?.[0];
+        if (!newStream) {
+          newStream = prev[peerId] || new MediaStream();
+          newStream.addTrack(event.track);
+        }
+        // Always create a new MediaStream instance to force React's VideoTile useEffect to update srcObject
+        return { ...prev, [peerId]: new MediaStream(newStream.getTracks()) };
+      });
     };
 
     pc.onicecandidate = (event) => {
@@ -183,21 +200,7 @@ export const useWebRTC = (
 
     peerConnections.current.set(peerId, pc);
     return pc;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — removePeerConnection defined below
-
-  const removePeerConnection = useCallback((peerId: string) => {
-    const pc = peerConnections.current.get(peerId);
-    if (pc) {
-      pc.close();
-      peerConnections.current.delete(peerId);
-    }
-    iceCandidateQueues.current.delete(peerId);
-    setRemoteStreams((prev) => {
-      const updated = { ...prev };
-      delete updated[peerId];
-      return updated;
-    });
-  }, []);
+  }, [iceServers, removePeerConnection]);
 
   const connectWs = useCallback((activeStream: MediaStream) => {
     if (ws.current) {
