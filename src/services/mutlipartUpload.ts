@@ -243,23 +243,11 @@ export class MultipartUploader {
                 partNumber: currentPartNumber,
             });
 
-            // 2. PUT the blob directly to R2 — never touches your server
-            const response = await fetch(data.presignedUrl, {
-                method: 'PUT',
-                body: blob,
-                // Do not set Content-Type here, it was not signed into the presigned URL
-                // headers: { 'Content-Type': 'video/webm' },
-            });
-
-            if (!response.ok) {
-                throw new Error(`R2 rejected part ${currentPartNumber}: HTTP ${response.status}`);
-            }
-
-            // R2 returns the ETag for each part — required for CompleteMultipartUpload
-            const etag = response.headers.get('ETag');
-            if (!etag) {
-                throw new Error(`R2 did not return ETag for part ${currentPartNumber}`);
-            }
+            const etag = await this.uploadPartDirectOrProxy(
+                data.presignedUrl,
+                blob,
+                currentPartNumber
+            );
 
             this.completedParts.push({ PartNumber: currentPartNumber, ETag: etag });
             this.bytesUploaded += blob.size;
@@ -273,16 +261,51 @@ export class MultipartUploader {
         } catch (err) {
             // One failed part is unrecoverable in the current simple design —
             // abort the whole session so R2 cleans up staged parts.
-            let error = err instanceof Error ? err : new Error(String(err));
-            if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                error = new Error(
-                    'Failed to upload recording part to R2. Check the R2 bucket CORS policy allows PUT from this frontend origin and exposes the ETag header.'
-                );
-            }
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error(`[MultipartUploader] Part ${currentPartNumber} failed:`, error);
             this.aborted = true;
             this.options.onError?.(error);
             await this.abort();
         }
+    }
+
+    private async uploadPartDirectOrProxy(
+        presignedUrl: string,
+        blob: Blob,
+        partNumber: number
+    ): Promise<string> {
+        try {
+            const response = await fetch(presignedUrl, {
+                method: 'PUT',
+                body: blob,
+                // Do not set Content-Type here, it was not signed into the presigned URL.
+            });
+
+            if (!response.ok) {
+                throw new Error(`R2 rejected part ${partNumber}: HTTP ${response.status}`);
+            }
+
+            const etag = response.headers.get('ETag');
+            if (etag) return etag;
+
+            console.warn(`[MultipartUploader] R2 part ${partNumber} uploaded directly but ETag was hidden. Retrying through backend proxy.`);
+        } catch (err) {
+            console.warn(`[MultipartUploader] Direct R2 upload failed for part ${partNumber}; retrying through backend proxy.`, err);
+        }
+
+        const { data } = await api.post<{ ETag: string }>('/upload/multipart/part/proxy', blob, {
+            params: {
+                key: this.key,
+                uploadId: this.uploadId,
+                partNumber,
+            },
+            headers: { 'Content-Type': 'application/octet-stream' },
+        });
+
+        if (!data.ETag) {
+            throw new Error(`Backend proxy did not return ETag for part ${partNumber}`);
+        }
+
+        return data.ETag;
     }
 }
