@@ -206,6 +206,11 @@ export const VideoCall: React.FC = () => {
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [recordingError, setRecordingError] = useState<string | null>(null);
+    const recordingStatusRef = useRef<RecordingStatus>('idle');
+
+    useEffect(() => {
+        recordingStatusRef.current = recordingStatus;
+    }, [recordingStatus]);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const uploaderRef = useRef<MultipartUploader | null>(null);
@@ -214,6 +219,7 @@ export const VideoCall: React.FC = () => {
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [recordingNameInput, setRecordingNameInput] = useState('');
     const recordingNameRef = useRef<string | null>(null);
+    const pendingStopNameRef = useRef<string | null>(null);
 
     // Set to true during a device swap so onstop doesn't finalise the upload prematurely.
     const deviceSwitchingRef = useRef(false);
@@ -253,8 +259,20 @@ export const VideoCall: React.FC = () => {
     // Each participant records their own high-quality local camera + mic stream and
     // uploads it to the shared room folder on R2. No network quality dependency.
     // After the session the editor folder contains one track per participant.
-    const startRecording = useCallback(async () => {
-        if (!recordingStream) return;
+    const buildDefaultRecordingName = useCallback(() => (
+        `${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`
+    ), [user?.name]);
+
+    const startRecording = useCallback(async (): Promise<boolean> => {
+        if (!recordingStream) {
+            setRecordingError('Recording stream is not available yet.');
+            return false;
+        }
+        const currentStatus = recordingStatusRef.current;
+        if (currentStatus !== 'idle' && currentStatus !== 'aborted') return false;
+
+        pendingStopNameRef.current = null;
+        recordingStatusRef.current = 'starting';
         setRecordingStatus('starting');
         setUploadProgress(null);
         setDownloadUrl(null);
@@ -278,25 +296,64 @@ export const VideoCall: React.FC = () => {
         try { await uploader.start(mimeType); }
         catch {
             setRecordingError('Could not start upload session. Check your connection.');
+            recordingStatusRef.current = 'idle';
             setRecordingStatus('idle');
-            return;
+            uploaderRef.current = null;
+            return false;
         }
 
         try {
             recordingStartTimeRef.current = Date.now();
-            attachMediaRecorder(recordingStream, uploader);
-            setRecordingStatus('recording');
+            const recorder = attachMediaRecorder(recordingStream, uploader);
+            const pendingStopName = pendingStopNameRef.current;
+            if (pendingStopName) {
+                pendingStopNameRef.current = null;
+                recordingNameRef.current = pendingStopName;
+                recordingStatusRef.current = 'stopping';
+                setRecordingStatus('stopping');
+                if (recorder.state !== 'inactive') {
+                    try { recorder.requestData(); } catch {}
+                    recorder.stop();
+                }
+            } else {
+                recordingStatusRef.current = 'recording';
+                setRecordingStatus('recording');
+            }
+            return true;
         } catch (err: any) {
             setRecordingError('Could not start recording. Codec not supported?');
+            recordingStatusRef.current = 'idle';
             setRecordingStatus('idle');
             uploader.abort();
+            uploaderRef.current = null;
+            return false;
         }
     }, [recordingStream, activeRoomId, attachMediaRecorder]);
 
-    const handleStartRecordingClick = useCallback(() => {
-        startRecording();
-        broadcastSignal('start-recording');
+    const handleStartRecordingClick = useCallback(async () => {
+        const started = await startRecording();
+        if (started) broadcastSignal('start-recording');
     }, [startRecording, broadcastSignal]);
+
+    const stopRecording = useCallback((name?: string) => {
+        const finalName = (name?.trim() || buildDefaultRecordingName());
+        recordingNameRef.current = finalName;
+
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
+            recordingStatusRef.current = 'stopping';
+            setRecordingStatus('stopping');
+            try { recorder.requestData(); } catch {}
+            recorder.stop();
+            return;
+        }
+
+        if (recordingStatusRef.current === 'starting') {
+            pendingStopNameRef.current = finalName;
+            recordingStatusRef.current = 'stopping';
+            setRecordingStatus('stopping');
+        }
+    }, [buildDefaultRecordingName]);
 
     // Seamlessly swaps the MediaRecorder to a new track without stopping the upload.
     // Called when the user switches their mic or camera mid-recording.
@@ -332,32 +389,34 @@ export const VideoCall: React.FC = () => {
 
 
     const handleStopRecordingClick = useCallback(() => {
-        setRecordingNameInput(`${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`);
+        setRecordingNameInput(buildDefaultRecordingName());
         setShowNamePrompt(true);
-    }, [user?.name]);
+    }, [buildDefaultRecordingName]);
 
     const confirmStopRecording = useCallback(() => {
-        recordingNameRef.current = recordingNameInput;
         setShowNamePrompt(false);
-        const recorder = mediaRecorderRef.current;
-        if (recorder && recorder.state !== 'inactive') recorder.stop();
+        stopRecording(recordingNameInput);
         broadcastSignal('stop-recording');
-    }, [recordingNameInput, broadcastSignal]);
+    }, [recordingNameInput, stopRecording, broadcastSignal]);
 
     // Synchronize recording state with peers
     useEffect(() => {
         onSignalRef.current = (msg) => {
-            if (msg.type === 'start-recording' && recordingStatus === 'idle') {
+            const currentStatus = recordingStatusRef.current;
+
+            if (msg.type === 'start-recording' && currentStatus === 'idle') {
                 startRecording();
             }
-            if (msg.type === 'stop-recording' && (recordingStatus === 'recording' || recordingStatus === 'paused')) {
+            if (msg.type === 'stop-recording' && (
+                currentStatus === 'starting' ||
+                currentStatus === 'recording' ||
+                currentStatus === 'paused'
+            )) {
                 // Auto-stop and use a default name for peer-initiated stops
-                recordingNameRef.current = `${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`;
-                const recorder = mediaRecorderRef.current;
-                if (recorder && recorder.state !== 'inactive') recorder.stop();
+                stopRecording(buildDefaultRecordingName());
             }
         };
-    }, [recordingStatus, startRecording, user?.name]);
+    }, [startRecording, stopRecording, buildDefaultRecordingName]);
 
 
     const pauseRecording = useCallback(() => {
@@ -378,9 +437,11 @@ export const VideoCall: React.FC = () => {
 
     const handleHangUp = useCallback(() => {
         const recorder = mediaRecorderRef.current;
-        if (recorder && recorder.state !== 'inactive') recorder.stop();
-        uploaderRef.current?.abort();
-        setRecordingStatus('aborted');
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+            uploaderRef.current?.abort();
+            setRecordingStatus('aborted');
+        }
         endCall();
         setHasStarted(false);
         navigate('/');

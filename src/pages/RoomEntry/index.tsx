@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import packageJson from '../../../package.json';
 
 
 const RoomEntry: React.FC = () => {
@@ -57,7 +58,7 @@ const RoomEntry: React.FC = () => {
       }
     };
     checkNetwork();
-    
+
     const conn = (navigator as any).connection;
     if (conn) conn.addEventListener('change', checkNetwork);
 
@@ -68,7 +69,7 @@ const RoomEntry: React.FC = () => {
 
     window.addEventListener('online', checkNetwork);
     window.addEventListener('offline', handleOffline);
-    
+
     return () => {
       if (conn) conn.removeEventListener('change', checkNetwork);
       window.removeEventListener('online', checkNetwork);
@@ -88,7 +89,7 @@ const RoomEntry: React.FC = () => {
           const video = allDevices.find(d => d.kind === 'videoinput');
           if (video) setSelectedVideo(video.deviceId);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [showSettings, selectedAudio, selectedVideo]);
 
@@ -446,29 +447,29 @@ const RoomEntry: React.FC = () => {
                     <span className="material-symbols-outlined">close</span>
                   </button>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>Microphone</label>
-                  <select 
-                    value={selectedAudio} 
+                  <select
+                    value={selectedAudio}
                     onChange={e => setSelectedAudio(e.target.value)}
                     style={{ padding: '12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border-subtle)', color: 'var(--on-surface)' }}
                   >
                     {devices.filter(d => d.kind === 'audioinput').map(d => (
-                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone (${d.deviceId.slice(0,5)})`}</option>
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone (${d.deviceId.slice(0, 5)})`}</option>
                     ))}
                   </select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>Camera</label>
-                  <select 
-                    value={selectedVideo} 
+                  <select
+                    value={selectedVideo}
                     onChange={e => setSelectedVideo(e.target.value)}
                     style={{ padding: '12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border-subtle)', color: 'var(--on-surface)' }}
                   >
                     {devices.filter(d => d.kind === 'videoinput').map(d => (
-                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera (${d.deviceId.slice(0,5)})`}</option>
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera (${d.deviceId.slice(0, 5)})`}</option>
                     ))}
                   </select>
                 </div>
@@ -493,7 +494,7 @@ const RoomEntry: React.FC = () => {
           SECURED END-TO-END ENCRYPTION
         </span>
         <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', fontSize: '10px', textTransform: 'uppercase' }}>
-          LAKESIDE V0.2.0
+          LAKESIDE {packageJson.version}
         </span>
       </footer>
     </div>

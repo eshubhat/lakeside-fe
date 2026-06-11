@@ -273,7 +273,12 @@ export class MultipartUploader {
         } catch (err) {
             // One failed part is unrecoverable in the current simple design —
             // abort the whole session so R2 cleans up staged parts.
-            const error = err instanceof Error ? err : new Error(String(err));
+            let error = err instanceof Error ? err : new Error(String(err));
+            if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                error = new Error(
+                    'Failed to upload recording part to R2. Check the R2 bucket CORS policy allows PUT from this frontend origin and exposes the ETag header.'
+                );
+            }
             console.error(`[MultipartUploader] Part ${currentPartNumber} failed:`, error);
             this.aborted = true;
             this.options.onError?.(error);
