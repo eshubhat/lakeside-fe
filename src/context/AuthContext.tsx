@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, setMemoryToken } from '../services/api';
-import Loading from '../pages/Loading';
-
 export interface User {
   id: string;
   name: string;
@@ -32,8 +30,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedToken) setMemoryToken(savedToken);
     return savedToken;
   });
-  const [isInitializing, setIsInitializing] = useState(false);
-
   useEffect(() => {
     // Asynchronously try to refresh the token in the background just in case it's nearing expiration,
     // but don't block the UI rendering on it, and don't wipe the session if it fails 
@@ -77,11 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('user');
     localStorage.removeItem('token');
   };
-
-  if (isInitializing) {
-    // Avoid dropping the router into unauthenticated loops before resolving active sessions natively
-    return <Loading />;
-  }
 
   return (
     <AuthContext.Provider value={{ user, token, login, signup, logout }}>
