@@ -69,7 +69,8 @@ export class MultipartUploader {
      */
     async start(mimeType = 'video/webm'): Promise<string> {
         const { data } = await api.post<{ uploadId: string; key: string }>(
-            '/upload/multipart/start'
+            '/upload/multipart/start',
+            { roomId: this.options.roomId }
         );
         this.uploadId = data.uploadId;
         this.key = data.key;
