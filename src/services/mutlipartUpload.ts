@@ -181,7 +181,7 @@ export class MultipartUploader {
         if (this.processing) return;
         this.processing = true;
 
-        while (this.queue.length > 0 && !this.aborted && !this.finalising) {
+        while (this.queue.length > 0 && !this.aborted) {
             const chunk = this.queue.shift()!;
 
             // Read the blob into a raw ArrayBuffer so we can fill the accumulator

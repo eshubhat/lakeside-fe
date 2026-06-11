@@ -57,6 +57,7 @@ const EditorImport: React.FC = () => {
   const { user, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reImportRef = useRef<HTMLInputElement>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const [dragOver, setDragOver]           = useState(false);
   const [queuedFiles, setQueuedFiles]     = useState<File[]>([]);
@@ -345,20 +346,49 @@ const EditorImport: React.FC = () => {
               Import Video
             </h2>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
-              <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
+          <div style={{ position: 'relative' }}>
+            <div 
+              style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }}
+              onClick={() => setShowDropdown(!showDropdown)}
+            >
+              <div style={{ textAlign: 'right' }}>
+                <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
+                <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
+              </div>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '50%',
+                overflow: 'hidden', border: '1px solid var(--primary)', padding: '2px',
+                background: 'var(--surface-container-high)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
+              }}>
+                {user?.name?.[0]?.toUpperCase() || 'U'}
+              </div>
             </div>
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '50%',
-              overflow: 'hidden', border: '1px solid var(--primary)',
-              background: 'var(--surface-container-high)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
-            }}>
-              {user?.name?.[0]?.toUpperCase() || 'U'}
-            </div>
+
+            {showDropdown && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                borderRadius: '8px', padding: '8px', zIndex: 10, minWidth: '150px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}>
+                <button
+                  onClick={logout}
+                  style={{
+                    width: '100%', padding: '8px 16px', background: 'none', border: 'none',
+                    display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                    color: 'var(--error)', fontFamily: 'var(--font-button)', fontSize: '14px',
+                    justifyContent: 'flex-start'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </header>
 

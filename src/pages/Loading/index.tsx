@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { Cloud } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function Loading() {
@@ -8,85 +7,97 @@ export default function Loading() {
     // Fake progress animation
     useEffect(() => {
         const interval = setInterval(() => {
-            setProgress((p) => (p >= 95 ? 95 : p + Math.random() * 8));
+            setProgress((p) => (p >= 100 ? 100 : p + Math.random() * 8));
         }, 200);
         return () => clearInterval(interval);
     }, []);
 
     return (
-        <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-midnight text-white">
-
-            {/* 🌌 Animated background */}
-            <div className="fixed inset-0 -z-10">
-                <motion.div
-                    className="absolute top-[10%] right-[15%] w-96 h-96 bg-primary/10 rounded-full blur-[120px]"
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 6, repeat: Infinity }}
-                />
-                <motion.div
-                    className="absolute bottom-[5%] left-[10%] w-[500px] h-[500px] bg-primary-light/10 rounded-full blur-[150px]"
-                    animate={{ scale: [1.1, 0.9, 1.1] }}
-                    transition={{ duration: 8, repeat: Infinity }}
-                />
-            </div>
-
-            <div className="relative z-10 flex flex-col items-center text-center">
-
-                {/* 🔄 Pulsing + rotating loader */}
-                <div className="relative mb-16 flex items-center justify-center">
-
-                    {/* Outer rotating ring */}
+        <main style={{
+            position: 'relative',
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'var(--surface-container-lowest)',
+            color: 'var(--primary)',
+            overflow: 'hidden'
+        }}>
+            
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                maxWidth: '600px',
+                width: '100%',
+                padding: '0 24px'
+            }}>
+                
+                {/* 🔄 Minimalist Spinning Indicator */}
+                <div style={{ marginBottom: '40px', position: 'relative', width: '48px', height: '48px' }}>
                     <motion.div
-                        className="absolute w-[140px] h-[140px] rounded-full border border-primary/20"
+                        style={{
+                            position: 'absolute',
+                            width: '100%',
+                            height: '100%',
+                            border: '2px solid var(--border-subtle)',
+                            borderTop: '2px solid var(--primary)',
+                            borderRadius: '50%'
+                        }}
                         animate={{ rotate: 360 }}
-                        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                     />
-
-                    {/* Inner spinning arc */}
-                    <motion.div
-                        className="absolute w-[120px] h-[120px] rounded-full border-2 border-transparent border-t-primary-light"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                    />
-
-                    {/* Logo pulse */}
-                    <motion.div
-                        className="bg-midnight p-6 rounded-full border border-white/10"
-                        animate={{ scale: [1, 1.05, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                    >
-                        <Cloud className="w-16 h-16 text-primary-light fill-primary-light" />
-                    </motion.div>
                 </div>
 
                 {/* 🧠 Title */}
                 <motion.h1
-                    className="font-headline text-4xl md:text-5xl font-extrabold mb-4"
+                    className="type-headline-lg"
+                    style={{ marginBottom: '16px' }}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
                     Preparing Your Studio
                 </motion.h1>
 
-                <p className="text-white/60 mb-10 text-sm tracking-wide">
+                <p className="type-body-md" style={{ color: 'var(--on-surface-variant)', marginBottom: '48px' }}>
                     Initializing recording environment...
                 </p>
 
-                {/* 📊 Progress bar */}
-                <div className="w-64 h-1 bg-white/10 rounded-full overflow-hidden">
+                {/* 📊 Progress bar (Sharp borders, Vibrant Lime) */}
+                <div style={{
+                    width: '100%',
+                    maxWidth: '320px',
+                    height: '8px',
+                    backgroundColor: 'var(--surface-gray)',
+                    border: '1px solid var(--primary)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}>
                     <motion.div
-                        className="h-full bg-linear-to-r from-primary to-primary-light"
-                        style={{ width: `${progress}%` }}
+                        style={{
+                            height: '100%',
+                            backgroundColor: 'var(--vibrant-lime)',
+                            borderRight: '1px solid var(--primary)'
+                        }}
+                        initial={{ width: '0%' }}
+                        animate={{ width: `${Math.min(progress, 100)}%` }}
+                        transition={{ ease: "linear", duration: 0.2 }}
                     />
                 </div>
 
-                <div className="mt-4 text-xs text-white/50">
-                    {Math.floor(progress)}%
+                <div className="type-label-sm" style={{ marginTop: '16px', color: 'var(--on-surface-variant)' }}>
+                    {Math.min(Math.floor(progress), 100)}%
                 </div>
             </div>
 
-            <div className="fixed bottom-10 text-[10px] tracking-[0.3em] uppercase text-white/20">
-                Veridian Nocturne
+            <div className="type-label-sm" style={{
+                position: 'fixed',
+                bottom: '40px',
+                color: 'var(--on-surface-variant)'
+            }}>
+                LAKESIDE STUDIO
             </div>
         </main>
     );

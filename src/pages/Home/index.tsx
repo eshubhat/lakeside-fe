@@ -15,6 +15,7 @@ const Home: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [roomInput, setRoomInput] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // Goes to lobby (/room) which generates a new room ID
   const handleStartInstant = () => navigate('/room');
@@ -112,20 +113,49 @@ const Home: React.FC = () => {
               Start a Session
             </h2>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
-              <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
+          <div style={{ position: 'relative' }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }}
+              onClick={() => setShowDropdown(!showDropdown)}
+            >
+              <div style={{ textAlign: 'right' }}>
+                <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
+                <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
+              </div>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '50%',
+                overflow: 'hidden', border: '1px solid var(--primary)', padding: '2px',
+                background: 'var(--surface-container-high)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
+              }}>
+                {user?.name?.[0]?.toUpperCase() || 'U'}
+              </div>
             </div>
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '50%',
-              overflow: 'hidden', border: '1px solid var(--primary)', padding: '2px',
-              background: 'var(--surface-container-high)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
-            }}>
-              {user?.name?.[0]?.toUpperCase() || 'U'}
-            </div>
+
+            {showDropdown && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                borderRadius: '8px', padding: '8px', zIndex: 10, minWidth: '150px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}>
+                <button
+                  onClick={logout}
+                  style={{
+                    width: '100%', padding: '8px 16px', background: 'none', border: 'none',
+                    display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                    color: 'var(--error)', fontFamily: 'var(--font-button)', fontSize: '14px',
+                    justifyContent: 'flex-start'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -215,7 +245,7 @@ const Home: React.FC = () => {
           </div>
 
           {/* Recent Rooms (4/12) */}
-          <div style={{ gridColumn: 'span 4' }}>
+          {/* <div style={{ gridColumn: 'span 4' }}>
             <HoverCard style={{ padding: '32px' }}>
               <h4 className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '24px' }}>
                 RECENT ROOMS
@@ -236,7 +266,7 @@ const Home: React.FC = () => {
                 ))}
               </ul>
             </HoverCard>
-          </div>
+          </div> */}
 
           {/* Feature Banner (8/12) */}
           <div style={{ gridColumn: 'span 8' }}>
@@ -276,15 +306,11 @@ const Home: React.FC = () => {
         {/* Status bar */}
         <footer style={{ marginTop: '64px', display: 'flex', alignItems: 'center', gap: '32px', padding: '24px 0', borderTop: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--vibrant-lime)', animation: 'speaking-pulse 2s infinite' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--vibrant-lime)' }} />
             <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>SYSTEMS OPERATIONAL</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--on-surface-variant)' }}>public</span>
-            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>NORTH AMERICA — EAST (L-01)</span>
-          </div>
           <div style={{ marginLeft: 'auto' }}>
-            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>v2.4.0-STABLE</span>
+            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>v0.2.0</span>
           </div>
         </footer>
       </main>
