@@ -196,8 +196,9 @@ const MeetingFolderCard: React.FC<{ meeting: Meeting; formatDate: (d: string) =>
         const rec = meeting.tracks[i];
         setImportProgress(`Downloading track ${i + 1} of ${meeting.tracks.length}...`);
 
-        const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(rec.key)}`, { responseType: 'blob' });
-        const blob = res.data;
+        const res = await fetch(rec.downloadUrl);
+        if (!res.ok) throw new Error(`Track ${i + 1} failed: ${res.statusText}`);
+        const blob = await res.blob();
 
         let safeName = rec.name || `track-${i + 1}.webm`;
         safeName = safeName.replace(/[^a-zA-Z0-9.\-_ ]/g, '_');
@@ -331,8 +332,11 @@ const RecordingCard: React.FC<{ recording: Recording; formatDate: (d: string) =>
     try {
       setImporting(true);
       setImportError('');
-      const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(recording.key)}`, { responseType: 'blob' });
-      const blob = res.data;
+      const res = await fetch(recording.downloadUrl);
+      if (!res.ok) {
+        throw new Error(`Server responded with ${res.status}: ${res.statusText}`);
+      }
+      const blob = await res.blob();
 
       // Sanitise the filename so it doesn't contain characters that might break the FFmpeg virtual filesystem
       let safeName = recording.name || `recording-${recording.roomId || 'session'}.webm`;
