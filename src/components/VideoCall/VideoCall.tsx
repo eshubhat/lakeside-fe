@@ -146,12 +146,15 @@ export const VideoCall: React.FC = () => {
     // Dynamic TURN credentials (falls back to STUN-only on failure)
     const { iceServers, loading: turnLoading, error: turnError } = useTurnCredentials();
 
-    const { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing } = useWebRTC(
+    const onSignalRef = useRef<((msg: any) => void) | undefined>(undefined);
+
+    const { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing, broadcastSignal } = useWebRTC(
         SIGNALING_URL,
         activeRoomId,
         token,
         user,
         iceServers,
+        (msg) => onSignalRef.current?.(msg)
     );
 
     const [micEnabled, setMicEnabled] = useState(true);
@@ -290,6 +293,11 @@ export const VideoCall: React.FC = () => {
         }
     }, [recordingStream, activeRoomId, attachMediaRecorder]);
 
+    const handleStartRecordingClick = useCallback(() => {
+        startRecording();
+        broadcastSignal('start-recording');
+    }, [startRecording, broadcastSignal]);
+
     // Seamlessly swaps the MediaRecorder to a new track without stopping the upload.
     // Called when the user switches their mic or camera mid-recording.
     const reattachRecorder = useCallback(async (stream: MediaStream) => {
@@ -333,7 +341,23 @@ export const VideoCall: React.FC = () => {
         setShowNamePrompt(false);
         const recorder = mediaRecorderRef.current;
         if (recorder && recorder.state !== 'inactive') recorder.stop();
-    }, [recordingNameInput]);
+        broadcastSignal('stop-recording');
+    }, [recordingNameInput, broadcastSignal]);
+
+    // Synchronize recording state with peers
+    useEffect(() => {
+        onSignalRef.current = (msg) => {
+            if (msg.type === 'start-recording' && recordingStatus === 'idle') {
+                startRecording();
+            }
+            if (msg.type === 'stop-recording' && (recordingStatus === 'recording' || recordingStatus === 'paused')) {
+                // Auto-stop and use a default name for peer-initiated stops
+                recordingNameRef.current = `${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`;
+                const recorder = mediaRecorderRef.current;
+                if (recorder && recorder.state !== 'inactive') recorder.stop();
+            }
+        };
+    }, [recordingStatus, startRecording, user?.name]);
 
 
     const pauseRecording = useCallback(() => {
@@ -718,7 +742,7 @@ export const VideoCall: React.FC = () => {
                             {/* Recording controls */}
                             {recordingStream && isIdle && (
                                 <button
-                                    onClick={startRecording}
+                                    onClick={handleStartRecordingClick}
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '8px',
                                         background: 'none', border: 'none', cursor: 'pointer',
