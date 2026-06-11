@@ -921,3 +921,118 @@ input[type=range].preview-scrubber::-webkit-slider-thumb {
 }
 .file-queue-item:hover { border-color: var(--primary); }
 .file-queue-item + .file-queue-item { margin-top: 6px; }
+
+/* ─── Responsive Layouts ─────────────────────────────────────────────────── */
+
+.home-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--surface);
+}
+.home-sidebar {
+  width: 320px;
+  min-width: 320px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px;
+  gap: 8px;
+  z-index: 50;
+}
+.home-main {
+  margin-left: 320px;
+  flex: 1;
+  min-height: 100vh;
+  padding: 40px;
+  background: var(--surface-gray);
+}
+.home-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 24px;
+  max-width: 1100px;
+}
+.home-bento-instant { grid-column: span 7; }
+.home-bento-join { grid-column: span 5; }
+.home-bento-feature { grid-column: span 12; }
+
+.room-entry-layout {
+  flex: 1;
+  display: flex;
+  height: calc(100vh - 80px);
+  max-width: var(--container-max);
+  margin: 0 auto;
+  width: 100%;
+}
+.room-entry-sidebar {
+  width: 320px;
+  min-width: 320px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-container-lowest);
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  overflow-y: auto;
+}
+.room-entry-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--surface-gray);
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .home-layout { flex-direction: column; }
+  .home-sidebar {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 24px 16px;
+  }
+  .home-main {
+    margin-left: 0;
+    padding: 24px 16px;
+  }
+  .home-bento-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .home-bento-instant,
+  .home-bento-join,
+  .home-bento-feature {
+    grid-column: span 1;
+  }
+  
+  .room-entry-layout {
+    flex-direction: column;
+    height: auto;
+  }
+  .room-entry-sidebar {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 24px 16px;
+  }
+  .room-entry-main {
+    padding: 24px 16px;
+  }
+
+  /* Header adjustments for mobile */
+  header > div {
+    padding: 0 16px !important;
+  }
+}

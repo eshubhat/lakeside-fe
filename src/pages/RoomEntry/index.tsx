@@ -114,7 +114,7 @@ const RoomEntry: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header style={{
+      <header className="room-header-container" style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: 'var(--surface-container-lowest)',
         borderBottom: '1px solid var(--border-subtle)',
@@ -157,20 +157,9 @@ const RoomEntry: React.FC = () => {
       </header>
 
       {/* ── Body ───────────────────────────────────────────────────────── */}
-      <main style={{
-        flex: 1, display: 'flex',
-        height: 'calc(100vh - 80px)',
-        maxWidth: 'var(--container-max)', margin: '0 auto', width: '100%',
-      }}>
+      <main className="room-entry-layout">
         {/* Left sidebar — meeting details */}
-        <aside style={{
-          width: '320px', minWidth: '320px',
-          borderRight: '1px solid var(--border-subtle)',
-          background: 'var(--surface-container-lowest)',
-          padding: '40px',
-          display: 'flex', flexDirection: 'column', gap: '32px',
-          overflowY: 'auto',
-        }}>
+        <aside className="room-entry-sidebar">
           <div>
             <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', display: 'block', marginBottom: '8px', textTransform: 'uppercase' }}>
               READY TO JOIN
@@ -270,11 +259,7 @@ const RoomEntry: React.FC = () => {
         </aside>
 
         {/* Right main — camera preview */}
-        <section style={{
-          flex: 1, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          padding: '40px', background: 'var(--surface-gray)', position: 'relative',
-        }}>
+        <section className="room-entry-main">
           {/* Atmospheric lime glow */}
           <div aria-hidden style={{
             position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.4,
