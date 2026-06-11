@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import packageJson from '../../../package.json';
 
 
 const NAV_ITEMS = [
@@ -306,7 +307,7 @@ const Home: React.FC = () => {
             <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>SYSTEMS OPERATIONAL</span>
           </div>
           <div style={{ marginLeft: 'auto' }}>
-            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>v0.2.0</span>
+            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>v{packageJson.version}</span>
           </div>
         </footer>
       </main>
