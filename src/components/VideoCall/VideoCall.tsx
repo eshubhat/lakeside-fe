@@ -444,7 +444,7 @@ export const VideoCall: React.FC = () => {
         <div style={{ minHeight: '100vh', background: 'var(--surface-gray)', overflow: 'hidden' }}>
 
             {/* ── Top Nav ──────────────────────────────────────────────────── */}
-            <header style={{
+            <header className={`videocall-header ${hasStarted ? 'in-call' : ''}`} style={{
                 position: 'sticky', top: 0, zIndex: 50, width: '100%',
                 background: 'var(--surface-container-lowest)',
                 borderBottom: '1px solid var(--border-subtle)',
@@ -516,6 +516,7 @@ export const VideoCall: React.FC = () => {
 
             {/* ── Main ─────────────────────────────────────────────────────── */}
             <main
+                className="videocall-main"
                 style={{
                     position: 'relative',
                     height: 'calc(100vh - 80px)',
@@ -631,6 +632,7 @@ export const VideoCall: React.FC = () => {
                     return (
                         <div
                             id="video-grid"
+                            className={`videocall-grid ${streamsMap.length > 0 ? 'multi-peer' : ''}`}
                             style={{
                                 display: 'grid',
                                 gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -698,13 +700,14 @@ export const VideoCall: React.FC = () => {
 
                 {/* ── Floating Control Bar ──────────────────────────────── */}
                 <div
-                    className="glass-control"
+                    className="videocall-control-bar glass-control"
                     style={{
                         position: 'fixed', bottom: '40px',
                         left: '50%', transform: 'translateX(-50%)',
                         zIndex: 50,
                         padding: '16px 32px',
                         display: 'flex', alignItems: 'center', gap: '40px',
+                        borderRadius: '32px',
                     }}
                 >
                     {!hasStarted ? (
@@ -732,6 +735,13 @@ export const VideoCall: React.FC = () => {
                                 <ControlBtn icon={micEnabled ? 'mic' : 'mic_off'} label={micEnabled ? 'Mute' : 'Unmute'} onClick={handleToggleMic} active={!micEnabled} />
                                 <ControlBtn icon={camEnabled ? 'videocam' : 'videocam_off'} label={camEnabled ? 'Camera Off' : 'Camera On'} onClick={handleToggleCam} active={!camEnabled} />
                                 <ControlBtn icon={isScreenSharing ? 'cancel_presentation' : 'present_to_all'} label={isScreenSharing ? 'Stop Sharing' : 'Share Screen'} onClick={shareScreen} active={isScreenSharing} />
+                                <ControlBtn icon="fullscreen" label="Fullscreen" onClick={() => {
+                                    if (!document.fullscreenElement) {
+                                        document.documentElement.requestFullscreen().catch(() => {});
+                                    } else {
+                                        document.exitFullscreen().catch(() => {});
+                                    }
+                                }} />
                                 <ControlBtn icon="chat_bubble" label="Chat" onClick={() => setChatOpen(!chatOpen)} active={chatOpen} />
                                 <ControlBtn icon="settings" label="Settings" onClick={() => setSettingsOpen(true)} />
                             </div>
