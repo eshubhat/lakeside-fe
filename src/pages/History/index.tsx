@@ -4,12 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { registerFiles } from '../../lib/fileRegistry';
 
-const NAV_ITEMS = [
-  { icon: 'dashboard', label: 'Dashboard', active: false, href: '/' },
-  { icon: 'videocam', label: 'New Room', active: false, href: '/room' },
-  // { icon: 'video_library', label: 'Library', active: false, href: '#' },
-  { icon: 'history', label: 'History', active: true, href: '/history' },
-];
+import { AppLayout } from '../../components/AppLayout';
 
 interface Recording {
   _id: string;
@@ -37,7 +32,6 @@ const History: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -99,113 +93,7 @@ const History: React.FC = () => {
   }, [recordings]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', background: 'var(--surface)' }}>
-      {/* ── Mobile Header ─────────────────────────────────────────────── */}
-      {isMobile && (
-        <header style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 24px', background: 'var(--surface)', borderBottom: '1px solid var(--border-subtle)',
-          position: 'sticky', top: 0, zIndex: 100
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '32px', height: '32px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span className="material-symbols-outlined" style={{ color: 'var(--vibrant-lime)', fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>signal_cellular_alt</span>
-            </div>
-            <h1 className="type-headline-md" style={{ fontSize: '20px' }}>Lakeside</h1>
-          </div>
-          <button 
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{ background: 'none', border: 'none', color: 'var(--on-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>{mobileMenuOpen ? 'close' : 'menu'}</span>
-          </button>
-        </header>
-      )}
-
-      {/* ── Left Sidebar ─────────────────────────────────────────────── */}
-      {(!isMobile || mobileMenuOpen) && (
-        <aside style={{
-          width: isMobile ? '100%' : '320px', minWidth: isMobile ? '100%' : '320px',
-          height: isMobile ? 'calc(100vh - 65px)' : '100vh', position: 'fixed', left: 0, top: isMobile ? '65px' : 0,
-          background: 'var(--surface)',
-          borderRight: isMobile ? 'none' : '1px solid var(--border-subtle)',
-          display: 'flex', flexDirection: 'column',
-          padding: '32px 24px', gap: '8px',
-          zIndex: 50,
-        }}>
-          {/* Brand */}
-          {!isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-              <div style={{
-                width: '40px', height: '40px', background: 'var(--primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span className="material-symbols-outlined" style={{ color: 'var(--vibrant-lime)', fontVariationSettings: "'FILL' 1" }}>
-                  signal_cellular_alt
-                </span>
-              </div>
-              <div>
-                <h1 className="type-headline-md" style={{ fontSize: '24px' }}>Lakeside</h1>
-                <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px' }}>Enterprise Video</p>
-              </div>
-            </div>
-          )}
-
-          {/* Primary CTA */}
-          <button
-            onClick={() => navigate('/room')}
-            className="btn-action"
-            style={{ marginBottom: '32px', width: '100%', padding: '16px', justifyContent: 'center' }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add</span>
-            New Meeting
-          </button>
-
-          {/* Nav */}
-          <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {NAV_ITEMS.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (item.href !== '#') navigate(item.href);
-                  if (isMobile) setMobileMenuOpen(false);
-                }}
-                className={`sidebar-nav-item${item.active ? ' active' : ''}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontVariationSettings: item.active ? "'FILL' 1" : "'FILL' 0" }}>
-                  {item.icon}
-                </span>
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          {/* Bottom nav */}
-          <div style={{ marginTop: 'auto', paddingTop: '32px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <a href="#" className="sidebar-nav-item">
-              <span className="material-symbols-outlined">help</span>Help
-            </a>
-            <button
-              onClick={logout}
-              className="sidebar-nav-item"
-              style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
-            >
-              <span className="material-symbols-outlined">logout</span>Sign Out
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* ── Main Content ─────────────────────────────────────────────── */}
-      <main style={{ 
-        marginLeft: isMobile ? 0 : '320px', 
-        flex: 1, minHeight: '100vh', 
-        padding: isMobile ? '24px 16px' : '40px', 
-        background: 'var(--surface-gray)',
-        display: isMobile && mobileMenuOpen ? 'none' : 'block'
-      }}>
+    <AppLayout>
         {/* Header */}
         <header style={{ 
           display: 'flex', 
@@ -285,8 +173,7 @@ const History: React.FC = () => {
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </AppLayout>
   );
 };
 
@@ -310,9 +197,8 @@ const MeetingFolderCard: React.FC<{ meeting: Meeting; formatDate: (d: string) =>
         const rec = meeting.tracks[i];
         setImportProgress(`Downloading track ${i + 1} of ${meeting.tracks.length}...`);
         
-        const res = await fetch(rec.downloadUrl);
-        if (!res.ok) throw new Error(`Track ${i + 1} failed: ${res.statusText}`);
-        const blob = await res.blob();
+        const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(rec.key)}`, { responseType: 'blob' });
+        const blob = res.data;
         
         let safeName = rec.name || `track-${i+1}.webm`;
         safeName = safeName.replace(/[^a-zA-Z0-9.\-_ ]/g, '_');
@@ -410,9 +296,11 @@ const MeetingFolderCard: React.FC<{ meeting: Meeting; formatDate: (d: string) =>
       {expanded && (
         <div style={{ padding: '24px', background: 'var(--surface-gray)' }}>
           <h5 className="type-label-sm" style={{ marginBottom: '16px', color: 'var(--on-surface-variant)', textTransform: 'uppercase' }}>Individual Tracks</h5>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
             {meeting.tracks.map(rec => (
-              <RecordingCard key={rec._id} recording={rec} formatDate={formatDate} formatDuration={formatDuration} isMobile={isMobile} />
+              <div key={rec._id} style={{ flex: '1 1 240px', maxWidth: isMobile ? '100%' : 'calc(50% - 8px)' }}>
+                <RecordingCard recording={rec} formatDate={formatDate} formatDuration={formatDuration} isMobile={isMobile} />
+              </div>
             ))}
           </div>
         </div>
@@ -444,11 +332,8 @@ const RecordingCard: React.FC<{ recording: Recording; formatDate: (d: string) =>
     try {
       setImporting(true);
       setImportError('');
-      const res = await fetch(recording.downloadUrl);
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}: ${res.statusText}`);
-      }
-      const blob = await res.blob();
+      const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(recording.key)}`, { responseType: 'blob' });
+      const blob = res.data;
       
       // Sanitise the filename so it doesn't contain characters that might break the FFmpeg virtual filesystem
       let safeName = recording.name || `recording-${recording.roomId || 'session'}.webm`;
