@@ -23,12 +23,13 @@ type RecordingStatus =
 const VideoTile: React.FC<{
     stream: MediaStream | null;
     isLocal?: boolean;
+    isScreenSharing?: boolean;
     label: string;
     isActive?: boolean;
     isMuted?: boolean;
     isCamOff?: boolean;
     chip?: 'REC' | 'HD' | null;
-}> = ({ stream, isLocal, label, isActive, isMuted, isCamOff, chip }) => {
+}> = ({ stream, isLocal, isScreenSharing, label, isActive, isMuted, isCamOff, chip }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
@@ -66,7 +67,7 @@ const VideoTile: React.FC<{
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover',
-                        transform: isLocal ? 'scaleX(-1)' : 'none' 
+                        transform: (isLocal && !isScreenSharing) ? 'scaleX(-1)' : 'none' 
                     }}
                 />
             ) : (
@@ -133,7 +134,7 @@ export const VideoCall: React.FC = () => {
     // Dynamic TURN credentials (falls back to STUN-only on failure)
     const { iceServers, loading: turnLoading, error: turnError } = useTurnCredentials();
 
-    const { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice } = useWebRTC(
+    const { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing } = useWebRTC(
         SIGNALING_URL,
         activeRoomId,
         token,
@@ -199,41 +200,44 @@ export const VideoCall: React.FC = () => {
     const [recordingNameInput, setRecordingNameInput] = useState('');
     const recordingNameRef = useRef<string | null>(null);
 
-    // When true, the MediaRecorder onstop handler skips finalising the upload.
-    // A fresh MediaRecorder is then attached to the same live uploader session.
+    // Set to true during a device swap so onstop doesn't finalise the upload prematurely.
     const deviceSwitchingRef = useRef(false);
 
-    // Used both by startRecording (new session) and reattachRecorder (device swap).
+    // Attaches a MediaRecorder to an already-started MultipartUploader session.
+    // Used both on first start and after a device swap (reattachRecorder).
     const attachMediaRecorder = useCallback((stream: MediaStream, uploader: MultipartUploader) => {
-        const videoBitsPerSecond = 8_000_000;
+        // Canvas captureStream() tracks have an empty label; raw camera tracks have a device label.
+        // Use a lower bitrate for composite streams — 720p canvas doesn't need 8 Mbps.
+        const isComposite = stream.getVideoTracks()[0]?.label === '';
+        const videoBitsPerSecond = isComposite ? 4_000_000 : 8_000_000; // 4 Mbps composite, 8 Mbps raw cam
         const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
         const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm';
 
         const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond });
         recorder.ondataavailable = (e) => { if (e.data?.size > 0) uploader.addChunk(e.data); };
         recorder.onstop = async () => {
-            if (deviceSwitchingRef.current) {
-                // Device swap in progress — do NOT finalise. A new MediaRecorder
-                // will continue feeding chunks into the same upload session.
-                return;
-            }
+            if (deviceSwitchingRef.current) return; // device swap — don't finalise yet
             const dur = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
             setRecordingStatus('uploading');
-            const finalName = recordingNameRef.current || `Recording - ${new Date().toLocaleString()}`;
+            const finalName = recordingNameRef.current || `${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`;
             await uploader.finalise(dur, finalName);
             recordingNameRef.current = null;
         };
         recorder.onerror = () => {
-            if (deviceSwitchingRef.current) return; // error expected during track swap — ignore
+            if (deviceSwitchingRef.current) return;
             setRecordingError('MediaRecorder encountered an error.');
             setRecordingStatus('aborted');
             uploader.abort();
         };
         mediaRecorderRef.current = recorder;
-        recorder.start(5_000);
+        recorder.start(5_000); // 5-second chunks
         return recorder;
-    }, []);
+    }, [user?.name]);
 
+
+    // Each participant records their own high-quality local camera + mic stream and
+    // uploads it to the shared room folder on R2. No network quality dependency.
+    // After the session the editor folder contains one track per participant.
     const startRecording = useCallback(async () => {
         if (!recordingStream) return;
         setRecordingStatus('starting');
@@ -274,8 +278,8 @@ export const VideoCall: React.FC = () => {
         }
     }, [recordingStream, activeRoomId, attachMediaRecorder]);
 
-    // Stops the current MediaRecorder without finalising the upload, waits for
-    // the stream to stabilise, then starts a fresh recorder on the same uploader.
+    // Seamlessly swaps the MediaRecorder to a new track without stopping the upload.
+    // Called when the user switches their mic or camera mid-recording.
     const reattachRecorder = useCallback(async (stream: MediaStream) => {
         const uploader = uploaderRef.current;
         if (!uploader) return;
@@ -283,24 +287,34 @@ export const VideoCall: React.FC = () => {
         deviceSwitchingRef.current = true;
         const recorder = mediaRecorderRef.current;
         if (recorder && recorder.state !== 'inactive') {
-            // Request any buffered data then stop without finalising
             recorder.requestData();
             recorder.stop();
         }
 
-        // Give the old recorder a moment to flush and the new tracks to stabilise
         await new Promise(resolve => setTimeout(resolve, 300));
         deviceSwitchingRef.current = false;
 
-        // Attach a new MediaRecorder to the already-running upload session
         attachMediaRecorder(stream, uploader);
     }, [attachMediaRecorder]);
 
+    // Auto-reattach the MediaRecorder whenever recordingStream changes identity.
+    // This fires when screen sharing starts/stops (useWebRTC replaces the stream object).
+    // Using a ref to avoid the effect running on mount or on status changes — only on stream swap.
+    const prevRecStreamRef = useRef<MediaStream | null>(null);
+    useEffect(() => {
+        if (prevRecStreamRef.current === recordingStream) return; // no identity change
+        prevRecStreamRef.current = recordingStream;
+        if (!recordingStream) return;
+        const isActive = recordingStatus === 'recording' || recordingStatus === 'paused';
+        if (!isActive) return;
+        reattachRecorder(recordingStream);
+    }, [recordingStream, recordingStatus, reattachRecorder]);
+
 
     const handleStopRecordingClick = useCallback(() => {
-        setRecordingNameInput(`Recording - ${new Date().toLocaleString()}`);
+        setRecordingNameInput(`${user?.name ?? 'Track'} - ${new Date().toLocaleString()}`);
         setShowNamePrompt(true);
-    }, []);
+    }, [user?.name]);
 
     const confirmStopRecording = useCallback(() => {
         recordingNameRef.current = recordingNameInput;
@@ -583,11 +597,12 @@ export const VideoCall: React.FC = () => {
                     <VideoTile
                         stream={localStream}
                         isLocal
+                        isScreenSharing={isScreenSharing}
                         label={user?.name || 'You'}
                         isActive={!hasStarted}
                         chip={hasStarted ? 'HD' : null}
                         isMuted={!micEnabled}
-                        isCamOff={!camEnabled}
+                        isCamOff={!camEnabled && !isScreenSharing}
                     />
 
                     {/* Remote tiles */}
@@ -665,7 +680,7 @@ export const VideoCall: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                                 <ControlBtn icon={micEnabled ? 'mic' : 'mic_off'} label={micEnabled ? 'Mute' : 'Unmute'} onClick={handleToggleMic} active={!micEnabled} />
                                 <ControlBtn icon={camEnabled ? 'videocam' : 'videocam_off'} label={camEnabled ? 'Camera Off' : 'Camera On'} onClick={handleToggleCam} active={!camEnabled} />
-                                <ControlBtn icon="present_to_all" label="Share" />
+                                <ControlBtn icon={isScreenSharing ? 'cancel_presentation' : 'present_to_all'} label={isScreenSharing ? 'Stop Sharing' : 'Share Screen'} onClick={shareScreen} active={isScreenSharing} />
                                 <ControlBtn icon="chat_bubble" label="Chat" onClick={() => setChatOpen(!chatOpen)} active={chatOpen} />
                                 <ControlBtn icon="settings" label="Settings" onClick={() => setSettingsOpen(true)} />
                             </div>

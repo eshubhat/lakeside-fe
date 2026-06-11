@@ -359,6 +359,19 @@ export const useWebRTC = (
       ws.current = null;
     }
 
+    // Stop screen share tracks and compositor if active
+    screenTrackRef.current?.stop();
+    screenTrackRef.current = null;
+    setIsScreenSharing(false);
+
+    if (compositorRef.current) {
+      compositorRef.current.stop();
+      compositorRef.current.canvasTrack.stop();
+      compositorRef.current.originalCameraTrack.stop();
+      compositorRef.current.originalHQCameraTrack?.stop();
+      compositorRef.current = null;
+    }
+
     // Stop preview tracks
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
@@ -460,7 +473,221 @@ export const useWebRTC = (
     }
   }, [changeDevice]);
 
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenTrackRef = useRef<MediaStreamTrack | null>(null);
 
+  /**
+   * compositorRef holds everything needed to cleanly tear down the canvas compositor:
+   * - stop(): cancels the setInterval draw loop and nulls video elements
+   * - canvasTrack: the MediaStreamTrack produced by canvas.captureStream()
+   * - originalCameraTrack: the camera track that was active before screen share started
+   *   (kept alive — used by the compositor's offscreen camera video element)
+   */
+  const compositorRef = useRef<{
+    stop: () => void;
+    canvasTrack: MediaStreamTrack;
+    originalCameraTrack: MediaStreamTrack;
+    originalHQCameraTrack?: MediaStreamTrack;
+  } | null>(null);
 
-  return { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice };
+  const shareScreen = useCallback(async () => {
+    // ── STOP SCREEN SHARE ───────────────────────────────────────────────────
+    if (isScreenSharing) {
+      const compositor = compositorRef.current;
+      compositor?.stop();
+      compositor?.canvasTrack.stop();
+      compositorRef.current = null;
+      screenTrackRef.current?.stop();
+      screenTrackRef.current = null;
+      setIsScreenSharing(false);
+
+      const origCamTrack = compositor?.originalCameraTrack;
+      if (!origCamTrack) return;
+
+      // Restore camera in local preview stream
+      if (localStreamRef.current) {
+        localStreamRef.current.getVideoTracks().forEach(t => localStreamRef.current!.removeTrack(t));
+        localStreamRef.current.addTrack(origCamTrack);
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+      }
+
+      // Restore camera in recording stream — new object so VideoCall's useEffect fires
+      const recStream = recordingStreamRef.current;
+      const origHQCamTrack = compositor?.originalHQCameraTrack;
+      if (recStream && recStream !== localStreamRef.current && origHQCamTrack) {
+        const audio = recStream.getAudioTracks();
+        const newRec = new MediaStream([origHQCamTrack.clone(), ...audio]);
+        recordingStreamRef.current = newRec;
+        setRecordingStream(newRec);
+      }
+
+      // Restore camera in peer connections
+      peerConnections.current.forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        sender?.replaceTrack(origCamTrack).catch(e =>
+          console.error('[WebRTC] replaceTrack (restore cam):', e)
+        );
+      });
+      return;
+    }
+
+    // ── START SCREEN SHARE ──────────────────────────────────────────────────
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: false,
+      });
+      const screenTrack = displayStream.getVideoTracks()[0];
+      screenTrackRef.current = screenTrack;
+
+      const origCamTrack = localStreamRef.current?.getVideoTracks()[0];
+      if (!origCamTrack) {
+        console.error('[WebRTC] No camera track available — cannot start compositor');
+        screenTrack.stop();
+        return;
+      }
+
+      // ── Canvas compositor ─────────────────────────────────────────────────
+      // Composites: full-frame screen share + mirrored PiP camera (bottom-right).
+      // 1280×720 keeps CPU pressure manageable; rAF never piles up if a draw is slow.
+      const COMP_W = 1280;
+      const COMP_H = 720;
+      const FPS    = 30;
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = COMP_W;
+      canvas.height = COMP_H;
+      const ctx = canvas.getContext('2d', { alpha: false })!; // alpha:false → ~15% faster compositing
+
+      // Offscreen video elements that feed the compositor — never inserted into the DOM
+      const screenVid = document.createElement('video');
+      screenVid.srcObject = new MediaStream([screenTrack]);
+      screenVid.muted = true;
+      screenVid.play().catch(() => {});
+
+      const camVid = document.createElement('video');
+      camVid.srcObject = new MediaStream([origCamTrack]);
+      camVid.muted = true;
+      camVid.play().catch(() => {});
+
+      const PIP_W  = Math.round(COMP_W * 0.22);  // ~282px
+      const PIP_H  = Math.round(COMP_H * 0.22);  // ~158px
+      const PIP_X  = COMP_W - PIP_W - 20;
+      const PIP_Y  = COMP_H - PIP_H - 20;
+
+      // requestAnimationFrame: browser-managed, never stacks up if a frame is slow.
+      // Much lower CPU pressure than setInterval at the same target FPS.
+      let animFrameId = 0;
+      const draw = () => {
+        // Screen background
+        if (screenVid.readyState >= 2) {
+          ctx.drawImage(screenVid, 0, 0, COMP_W, COMP_H);
+        } else {
+          ctx.fillStyle = '#111216';
+          ctx.fillRect(0, 0, COMP_W, COMP_H);
+        }
+
+        // PiP: mirrored camera overlay
+        if (camVid.readyState >= 2) {
+          ctx.save();
+          ctx.translate(PIP_X + PIP_W, PIP_Y);
+          ctx.scale(-1, 1); // mirror
+          ctx.drawImage(camVid, 0, 0, PIP_W, PIP_H);
+          ctx.restore();
+
+          // Lime accent border
+          ctx.strokeStyle = '#C8F135';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(PIP_X, PIP_Y, PIP_W, PIP_H);
+        }
+
+        animFrameId = requestAnimationFrame(draw);
+      };
+      animFrameId = requestAnimationFrame(draw);
+
+      const canvasTrack = canvas.captureStream(FPS).getVideoTracks()[0];
+
+      let origHQCamTrack: MediaStreamTrack | undefined = undefined;
+
+      // Local preview tile: shows compositor (screen + PiP cam)
+      if (localStreamRef.current) {
+        localStreamRef.current.getVideoTracks().forEach(t => localStreamRef.current!.removeTrack(t));
+        localStreamRef.current.addTrack(canvasTrack);
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+      }
+
+      // Recording stream: new MediaStream → triggers VideoCall's useEffect → reattachRecorder
+      const recStream = recordingStreamRef.current;
+      if (recStream && recStream !== localStreamRef.current) {
+        origHQCamTrack = recStream.getVideoTracks()[0];
+        const audio = recStream.getAudioTracks();
+        const newRec = new MediaStream([canvasTrack.clone(), ...audio]);
+        recordingStreamRef.current = newRec;
+        setRecordingStream(newRec);
+      }
+
+      compositorRef.current = {
+        stop: () => {
+          cancelAnimationFrame(animFrameId);
+          screenVid.srcObject = null;
+          camVid.srcObject = null;
+        },
+        canvasTrack,
+        originalCameraTrack: origCamTrack,
+        originalHQCameraTrack: origHQCamTrack,
+      };
+
+      setIsScreenSharing(true);
+
+      // Peer connections: all remotes see screen + PiP cam composite
+      peerConnections.current.forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        sender?.replaceTrack(canvasTrack).catch(e =>
+          console.error('[WebRTC] replaceTrack (compositor):', e)
+        );
+      });
+
+      // ── Native "Stop sharing" button ──────────────────────────────────────
+      screenTrack.onended = () => {
+        const compositor = compositorRef.current;
+        compositor?.stop();
+        compositor?.canvasTrack.stop();
+        compositorRef.current = null;
+        screenTrackRef.current = null;
+        setIsScreenSharing(false);
+
+        const camTrack = compositor?.originalCameraTrack;
+        if (!camTrack) return;
+
+        if (localStreamRef.current) {
+          localStreamRef.current.getVideoTracks().forEach(t => localStreamRef.current!.removeTrack(t));
+          localStreamRef.current.addTrack(camTrack);
+          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+
+        const recStream = recordingStreamRef.current;
+        const hqCamTrack = compositor?.originalHQCameraTrack;
+        if (recStream && recStream !== localStreamRef.current && hqCamTrack) {
+          const audio = recStream.getAudioTracks();
+          const newRec = new MediaStream([hqCamTrack.clone(), ...audio]);
+          recordingStreamRef.current = newRec;
+          setRecordingStream(newRec);
+        }
+
+        peerConnections.current.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          sender?.replaceTrack(camTrack).catch(e =>
+            console.error('[WebRTC] replaceTrack (restore cam on ended):', e)
+          );
+        });
+      };
+
+    } catch (err: any) {
+      if (err?.name !== 'NotAllowedError') {
+        console.error('[WebRTC] getDisplayMedia error:', err);
+      }
+    }
+  }, [isScreenSharing]);
+
+  return { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing };
 };

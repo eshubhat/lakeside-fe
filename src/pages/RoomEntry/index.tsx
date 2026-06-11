@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,6 +13,84 @@ const RoomEntry: React.FC = () => {
   const [camOn, setCamOn] = useState(true);
   const [toastDismissed, setToastDismissed] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudio, setSelectedAudio] = useState<string>('');
+  const [selectedVideo, setSelectedVideo] = useState<string>('');
+
+  // Network
+  const [networkStatus, setNetworkStatus] = useState('CHECKING...');
+  const [networkColor, setNetworkColor] = useState('var(--vibrant-lime)');
+
+  useEffect(() => {
+    const checkNetwork = () => {
+      const conn = (navigator as any).connection;
+      if (conn && typeof conn.downlink === 'number') {
+        const mbps = conn.downlink;
+        if (mbps >= 10) {
+          setNetworkStatus('EXCELLENT');
+          setNetworkColor('var(--vibrant-lime)'); // green
+        } else if (mbps >= 5) {
+          setNetworkStatus('DECENT');
+          setNetworkColor('#FFC107'); // yellow
+        } else {
+          setNetworkStatus('BAD');
+          setNetworkColor('var(--error)'); // red
+        }
+      } else if (conn) {
+        // Fallback if downlink is unavailable but effectiveType is
+        if (conn.effectiveType === '4g') {
+          setNetworkStatus('EXCELLENT');
+          setNetworkColor('var(--vibrant-lime)');
+        } else if (conn.effectiveType === '3g') {
+          setNetworkStatus('DECENT');
+          setNetworkColor('#FFC107');
+        } else {
+          setNetworkStatus('BAD');
+          setNetworkColor('var(--error)');
+        }
+      } else {
+        setNetworkStatus('ONLINE');
+        setNetworkColor('var(--vibrant-lime)');
+      }
+    };
+    checkNetwork();
+    
+    const conn = (navigator as any).connection;
+    if (conn) conn.addEventListener('change', checkNetwork);
+
+    const handleOffline = () => {
+      setNetworkStatus('OFFLINE');
+      setNetworkColor('var(--error)');
+    };
+
+    window.addEventListener('online', checkNetwork);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      if (conn) conn.removeEventListener('change', checkNetwork);
+      window.removeEventListener('online', checkNetwork);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showSettings) {
+      navigator.mediaDevices.enumerateDevices().then(allDevices => {
+        setDevices(allDevices);
+        if (!selectedAudio) {
+          const audio = allDevices.find(d => d.kind === 'audioinput');
+          if (audio) setSelectedAudio(audio.deviceId);
+        }
+        if (!selectedVideo) {
+          const video = allDevices.find(d => d.kind === 'videoinput');
+          if (video) setSelectedVideo(video.deviceId);
+        }
+      }).catch(() => {});
+    }
+  }, [showSettings, selectedAudio, selectedVideo]);
 
   const inviteLink = `${window.location.origin}/room/${roomId}`;
 
@@ -50,14 +128,7 @@ const RoomEntry: React.FC = () => {
           <div className="type-display-lg" style={{ fontSize: '28px', cursor: 'pointer' }} onClick={() => navigate('/')}>
             Lakeside
           </div>
-          <nav style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-            {['Meetings', 'Contacts', 'Recordings'].map((l) => (
-              <a key={l} href="#" className="type-button"
-                style={{ color: 'var(--on-surface-variant)', textDecoration: 'none' }}>
-                {l}
-              </a>
-            ))}
-          </nav>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
               <span className="material-symbols-outlined">notifications</span>
@@ -144,10 +215,9 @@ const RoomEntry: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{
                   width: '8px', height: '8px', borderRadius: '50%',
-                  background: 'var(--vibrant-lime)',
-                  animation: 'speaking-pulse 2s infinite',
+                  background: networkColor,
                 }} />
-                <span className="type-label-sm">EXCELLENT</span>
+                <span className="type-label-sm">{networkStatus}</span>
               </div>
             </div>
 
@@ -312,7 +382,7 @@ const RoomEntry: React.FC = () => {
                 </button>
                 <div style={{ width: '1px', height: '32px', background: 'rgba(255,255,255,0.2)', margin: '0 8px' }} />
                 {/* Settings */}
-                <button style={{
+                <button onClick={() => setShowSettings(true)} style={{
                   width: '56px', height: '56px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: '#fff', color: 'var(--primary)',
@@ -372,6 +442,58 @@ const RoomEntry: React.FC = () => {
               </button>
             </div>
           )}
+
+          {/* Settings Modal */}
+          {showSettings && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 100,
+              background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <div style={{
+                background: 'var(--surface-container-lowest)', padding: '32px', borderRadius: '16px',
+                width: '400px', maxWidth: '90%', border: '1px solid var(--border-subtle)',
+                display: 'flex', flexDirection: 'column', gap: '24px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 className="type-headline-md">Device Settings</h2>
+                  <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>Microphone</label>
+                  <select 
+                    value={selectedAudio} 
+                    onChange={e => setSelectedAudio(e.target.value)}
+                    style={{ padding: '12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border-subtle)', color: 'var(--on-surface)' }}
+                  >
+                    {devices.filter(d => d.kind === 'audioinput').map(d => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone (${d.deviceId.slice(0,5)})`}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>Camera</label>
+                  <select 
+                    value={selectedVideo} 
+                    onChange={e => setSelectedVideo(e.target.value)}
+                    style={{ padding: '12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border-subtle)', color: 'var(--on-surface)' }}
+                  >
+                    {devices.filter(d => d.kind === 'videoinput').map(d => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera (${d.deviceId.slice(0,5)})`}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button onClick={() => setShowSettings(false)} className="btn-action" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}>
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 
@@ -386,7 +508,7 @@ const RoomEntry: React.FC = () => {
           SECURED END-TO-END ENCRYPTION
         </span>
         <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', fontSize: '10px', textTransform: 'uppercase' }}>
-          LAKESIDE V2.4.0-STABLE
+          LAKESIDE V0.2.0
         </span>
       </footer>
     </div>
