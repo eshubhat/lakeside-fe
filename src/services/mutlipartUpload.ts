@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios';
 import { api } from './api';
 
 export interface UploadProgress {
@@ -167,14 +168,14 @@ export class MultipartUploader {
     }
 
 
-    // R2 requires every non-final part to be EXACTLY this size.
-    // 8 MB is a safe multiple of the 5 MB minimum and gives clean boundaries.
-    private readonly PART_SIZE = 8 * 1024 * 1024; // 8 MB
+    // R2/S3 requires every non-final part to be at least 5 MB.
+    // Keep the boundary at the minimum so backend-proxy fallback requests stay small.
+    private readonly PART_SIZE = 5 * 1024 * 1024; // 5 MB
 
     // Fixed-size byte accumulator — filled from incoming chunks, flushed at
     // exactly PART_SIZE. Unlike the old Blob-merging approach, every non-final
     // part will be bit-for-bit identical in size, satisfying R2's constraint.
-    private accumulator = new Uint8Array(8 * 1024 * 1024);
+    private accumulator = new Uint8Array(this.PART_SIZE);
     private accumulatorOffset = 0;
     // Blob type carried across from the MediaRecorder mimeType
     private mimeType = 'video/webm';
@@ -293,19 +294,50 @@ export class MultipartUploader {
             console.warn(`[MultipartUploader] Direct R2 upload failed for part ${partNumber}; retrying through backend proxy.`, err);
         }
 
-        const { data } = await api.post<{ ETag: string }>('/upload/multipart/part/proxy', blob, {
-            params: {
-                key: this.key,
-                uploadId: this.uploadId,
-                partNumber,
-            },
-            headers: { 'Content-Type': 'application/octet-stream' },
-        });
+        let data: { ETag: string };
+        try {
+            const response = await api.post<{ ETag: string }>('/upload/multipart/part/proxy', blob, {
+                params: {
+                    key: this.key,
+                    uploadId: this.uploadId,
+                    partNumber,
+                },
+                headers: { 'Content-Type': 'application/octet-stream' },
+            });
+            data = response.data;
+        } catch (err) {
+            throw this.describeProxyUploadError(err, blob.size);
+        }
 
         if (!data.ETag) {
             throw new Error(`Backend proxy did not return ETag for part ${partNumber}`);
         }
 
         return data.ETag;
+    }
+
+    private describeProxyUploadError(err: unknown, bytes: number): Error {
+        if (err instanceof AxiosError) {
+            const apiBaseUrl = String(api.defaults.baseURL ?? '(relative API URL)');
+            const sizeMb = (bytes / 1_048_576).toFixed(1);
+
+            if (err.response) {
+                const message = typeof err.response.data?.error === 'string'
+                    ? err.response.data.error
+                    : err.message;
+                return new Error(`Backend proxy upload failed (${err.response.status}): ${message}`);
+            }
+
+            if (err.request) {
+                return new Error(
+                    `Backend proxy upload could not reach ${apiBaseUrl}. ` +
+                    `The ${sizeMb} MB part may be blocked by CORS, mixed-content HTTP/HTTPS, an incorrect VITE_API_URL, or a reverse-proxy body-size limit.`
+                );
+            }
+
+            return new Error(`Backend proxy upload failed: ${err.message}`);
+        }
+
+        return err instanceof Error ? err : new Error(String(err));
     }
 }
