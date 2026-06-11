@@ -26,7 +26,6 @@ interface Meeting {
 }
 
 const History: React.FC = () => {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,86 +93,86 @@ const History: React.FC = () => {
 
   return (
     <AppLayout>
-        {/* Header */}
-        <header style={{ 
-          display: 'flex', 
-          flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between', 
-          alignItems: isMobile ? 'flex-start' : 'flex-end', 
-          marginBottom: isMobile ? '32px' : '64px',
-          gap: isMobile ? '24px' : '0'
-        }}>
-          <div>
-            <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.2em', display: 'block', marginBottom: '8px' }}>
-              Workspace / Media
-            </span>
-            <h2 className="type-display-lg" style={{ letterSpacing: '-0.02em', fontSize: isMobile ? '32px' : undefined }}>
-              Recording History
-            </h2>
-          </div>
-          <div style={{ position: 'relative', alignSelf: isMobile ? 'flex-end' : 'auto' }}>
-            <div 
-              style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }}
-              onClick={() => setShowDropdown(!showDropdown)}
-            >
-              <div style={{ textAlign: 'right' }}>
-                <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
-                <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
-              </div>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '50%',
-                overflow: 'hidden', border: '1px solid var(--primary)', padding: '2px',
-                background: 'var(--surface-container-high)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
-              }}>
-                {user?.name?.[0]?.toUpperCase() || 'U'}
-              </div>
+      {/* Header */}
+      <header style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'space-between',
+        alignItems: isMobile ? 'flex-start' : 'flex-end',
+        marginBottom: isMobile ? '32px' : '64px',
+        gap: isMobile ? '24px' : '0'
+      }}>
+        <div>
+          <span className="type-label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.2em', display: 'block', marginBottom: '8px' }}>
+            Workspace / Media
+          </span>
+          <h2 className="type-display-lg" style={{ letterSpacing: '-0.02em', fontSize: isMobile ? '32px' : undefined }}>
+            Recording History
+          </h2>
+        </div>
+        <div style={{ position: 'relative', alignSelf: isMobile ? 'flex-end' : 'auto' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }}
+            onClick={() => setShowDropdown(!showDropdown)}
+          >
+            <div style={{ textAlign: 'right' }}>
+              <p className="type-button" style={{ color: 'var(--primary)' }}>{user?.name || 'User'}</p>
+              <p className="type-label-sm" style={{ color: 'var(--on-surface-variant)' }}>{user?.email || 'Member'}</p>
             </div>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '50%',
+              overflow: 'hidden', border: '1px solid var(--primary)', padding: '2px',
+              background: 'var(--surface-container-high)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-headline)', fontSize: '18px', fontWeight: 600,
+            }}>
+              {user?.name?.[0]?.toUpperCase() || 'U'}
+            </div>
+          </div>
 
-            {showDropdown && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                background: 'var(--surface)', border: '1px solid var(--border-subtle)',
-                borderRadius: '8px', padding: '8px', zIndex: 10, minWidth: '150px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}>
-                <button
-                  onClick={logout}
-                  style={{
-                    width: '100%', padding: '8px 16px', background: 'none', border: 'none',
-                    display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                    color: 'var(--error)', fontFamily: 'var(--font-button)', fontSize: '14px',
-                    justifyContent: 'flex-start'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container)'}
-                  onMouseOut={(e) => e.currentTarget.style.background = 'none'}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
-                  Sign Out
-                </button>
-              </div>
-            )}
-          </div>
-        </header>
+          {showDropdown && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+              background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+              borderRadius: '8px', padding: '8px', zIndex: 10, minWidth: '150px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <button
+                onClick={logout}
+                style={{
+                  width: '100%', padding: '8px 16px', background: 'none', border: 'none',
+                  display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                  color: 'var(--error)', fontFamily: 'var(--font-button)', fontSize: '14px',
+                  justifyContent: 'flex-start'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
 
-        {/* Recordings Grid */}
-        {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>Loading...</div>
-        ) : groupedMeetings.length === 0 ? (
-          <div style={{ padding: isMobile ? '40px 20px' : '80px 40px', textAlign: 'center', border: '1px dashed var(--outline-variant)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '48px', color: 'var(--outline-variant)', marginBottom: '16px' }}>folder_open</span>
-            <h3 className="type-headline-md" style={{ color: 'var(--on-surface-variant)' }}>No meetings found</h3>
-            <p className="type-body-md" style={{ color: 'var(--on-surface-variant)' }}>Your recorded sessions will appear here.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1000px' }}>
-            {groupedMeetings.map(meeting => (
-              <MeetingFolderCard key={meeting.id} meeting={meeting} formatDate={formatDate} formatDuration={formatDuration} isMobile={isMobile} />
-            ))}
-          </div>
-        )}
-      </AppLayout>
+      {/* Recordings Grid */}
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>Loading...</div>
+      ) : groupedMeetings.length === 0 ? (
+        <div style={{ padding: isMobile ? '40px 20px' : '80px 40px', textAlign: 'center', border: '1px dashed var(--outline-variant)' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '48px', color: 'var(--outline-variant)', marginBottom: '16px' }}>folder_open</span>
+          <h3 className="type-headline-md" style={{ color: 'var(--on-surface-variant)' }}>No meetings found</h3>
+          <p className="type-body-md" style={{ color: 'var(--on-surface-variant)' }}>Your recorded sessions will appear here.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1000px' }}>
+          {groupedMeetings.map(meeting => (
+            <MeetingFolderCard key={meeting.id} meeting={meeting} formatDate={formatDate} formatDuration={formatDuration} isMobile={isMobile} />
+          ))}
+        </div>
+      )}
+    </AppLayout>
   );
 };
 
@@ -191,22 +190,22 @@ const MeetingFolderCard: React.FC<{ meeting: Meeting; formatDate: (d: string) =>
     try {
       setImporting(true);
       setImportError('');
-      
+
       const files: File[] = [];
       for (let i = 0; i < meeting.tracks.length; i++) {
         const rec = meeting.tracks[i];
         setImportProgress(`Downloading track ${i + 1} of ${meeting.tracks.length}...`);
-        
+
         const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(rec.key)}`, { responseType: 'blob' });
         const blob = res.data;
-        
-        let safeName = rec.name || `track-${i+1}.webm`;
+
+        let safeName = rec.name || `track-${i + 1}.webm`;
         safeName = safeName.replace(/[^a-zA-Z0-9.\-_ ]/g, '_');
         if (!safeName.endsWith('.webm') && !safeName.endsWith('.mp4')) safeName += '.webm';
-        
+
         files.push(new File([blob], safeName, { type: 'video/webm' }));
       }
-      
+
       setImportProgress('Preparing editor...');
       const projectId = `proj-${Date.now()}`;
       registerFiles(projectId, files);
@@ -240,15 +239,15 @@ const MeetingFolderCard: React.FC<{ meeting: Meeting; formatDate: (d: string) =>
   return (
     <div style={{ background: 'var(--surface-container-lowest)', border: '1px solid var(--border-subtle)', transition: 'box-shadow 0.2s', boxShadow: hovered ? '0 8px 24px -4px rgba(0,0,0,0.05)' : 'none' }}>
       {/* Folder Header */}
-      <div 
+      <div
         onClick={() => setExpanded(!expanded)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          padding: isMobile ? '16px' : '24px', cursor: 'pointer', 
-          display: 'flex', 
+          padding: isMobile ? '16px' : '24px', cursor: 'pointer',
+          display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
-          alignItems: isMobile ? 'flex-start' : 'center', 
+          alignItems: isMobile ? 'flex-start' : 'center',
           justifyContent: 'space-between',
           gap: isMobile ? '16px' : '0',
           borderBottom: expanded ? '1px solid var(--border-subtle)' : 'none',
@@ -334,7 +333,7 @@ const RecordingCard: React.FC<{ recording: Recording; formatDate: (d: string) =>
       setImportError('');
       const res = await api.get(`/upload/download-proxy?key=${encodeURIComponent(recording.key)}`, { responseType: 'blob' });
       const blob = res.data;
-      
+
       // Sanitise the filename so it doesn't contain characters that might break the FFmpeg virtual filesystem
       let safeName = recording.name || `recording-${recording.roomId || 'session'}.webm`;
       safeName = safeName.replace(/[^a-zA-Z0-9.\-_ ]/g, '_');
