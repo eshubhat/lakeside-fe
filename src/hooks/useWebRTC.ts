@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface SignalMessage {
-  type: 'join' | 'user-joined' | 'user-left' | 'offer' | 'answer' | 'ice-candidate' | 'connected';
+  type: 'join' | 'user-joined' | 'user-left' | 'offer' | 'answer' | 'ice-candidate' | 'connected' | 'start-recording' | 'stop-recording';
   payload?: any;
 }
 
@@ -20,6 +20,8 @@ export const useWebRTC = (
   user: any,
   /** Dynamic ICE servers from useTurnCredentials — falls back to STUN-only if null */
   iceServers: RTCIceServer[] | null,
+  /** Optional callback for custom application-level signals */
+  onSignal?: (msg: SignalMessage) => void,
 ) => {
   // previewStream — low quality, sent over WebRTC to peers (shown in VideoPlayer tiles)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -338,13 +340,23 @@ export const useWebRTC = (
             break;
 
           default:
-            console.log('[WebRTC] Unhandled message type:', type);
+            if (onSignal) onSignal(message);
+            else console.log('[WebRTC] Unhandled message type:', type);
         }
       } catch (error) {
         console.error('[WebRTC] Error handling signaling message:', error);
       }
     };
-  }, [signalingUrl, roomId, token, user, createPeerConnection, removePeerConnection, drainIceCandidates]);
+  }, [signalingUrl, roomId, token, user, createPeerConnection, removePeerConnection, drainIceCandidates, onSignal]);
+
+  const broadcastSignal = useCallback((type: SignalMessage['type'], payload?: any) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({
+        type,
+        payload: { ...payload, senderId: myIdRef.current, roomId }
+      }));
+    }
+  }, [roomId]);
 
   const initialize = useCallback(async () => {
     // Guard against already-open connections
@@ -697,5 +709,5 @@ export const useWebRTC = (
     }
   }, [isScreenSharing]);
 
-  return { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing };
+  return { localStream, recordingStream, remoteStreams, initialize, endCall, toggleAudio, toggleVideo, changeDevice, shareScreen, isScreenSharing, broadcastSignal };
 };

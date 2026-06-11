@@ -121,6 +121,8 @@ export class MultipartUploader {
             await this.uploadPart(finalPart);
         }
 
+        if (this.aborted) return; // Prevent cascading into "nothing to upload" if final part failed
+
         if (this.completedParts.length === 0) {
             this.options.onError?.(new Error('No parts were uploaded — nothing to finalise.'));
             return;
@@ -245,7 +247,8 @@ export class MultipartUploader {
             const response = await fetch(data.presignedUrl, {
                 method: 'PUT',
                 body: blob,
-                headers: { 'Content-Type': 'video/webm' },
+                // Do not set Content-Type here, it was not signed into the presigned URL
+                // headers: { 'Content-Type': 'video/webm' },
             });
 
             if (!response.ok) {
