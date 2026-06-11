@@ -33,12 +33,22 @@ const VideoTile: React.FC<{
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        if (videoRef.current && stream) {
-            videoRef.current.srcObject = stream ?? null;
+        const el = videoRef.current;
+        if (!el) return;
+        // Always update srcObject and call play() — handles both first mount and stream identity changes
+        el.srcObject = stream ?? null;
+        if (stream) {
+            el.play().catch((err) => {
+                // NotAllowedError is expected if autoplay policy is strict — not fatal
+                if (err.name !== 'NotAllowedError') {
+                    console.warn('[VideoTile] play() failed:', err);
+                }
+            });
         }
     }, [stream]);
 
     const initials = label.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    const hasVideo = stream && stream.getVideoTracks().some(t => t.readyState === 'live') && !isCamOff;
 
     return (
         <div
@@ -49,32 +59,34 @@ const VideoTile: React.FC<{
                 border: isActive
                     ? '2px solid var(--vibrant-lime)'
                     : '1px solid var(--primary)',
-                aspectRatio: '16/9',
                 overflow: 'hidden',
                 transition: 'border-color 0.3s',
-                flex: 1,
-                minWidth: '260px',
+                width: '100%',
+                height: '100%',
             }}
         >
-            {/* Video / Avatar */}
-            {stream && !isCamOff ? (
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted={!!isLocal}
-                    style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        objectFit: 'cover',
-                        transform: (isLocal && !isScreenSharing) ? 'scaleX(-1)' : 'none' 
-                    }}
-                />
-            ) : (
+            {/* Always render video element so ref is always attached; hide it when no usable stream */}
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted={!!isLocal}
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: (isLocal && !isScreenSharing) ? 'scaleX(-1)' : 'none',
+                    display: hasVideo ? 'block' : 'none',
+                }}
+            />
+
+            {/* Avatar fallback — shown when camera is off or no live video track */}
+            {!hasVideo && (
                 <div style={{
                     width: '100%', height: '100%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'var(--primary-container)',
+                    position: 'absolute', inset: 0,
                 }}>
                     <div style={{
                         width: '80px', height: '80px', borderRadius: '50%',
@@ -582,68 +594,83 @@ export const VideoCall: React.FC = () => {
                 )}
 
                 {/* ── Video Grid ─────────────────────────────────────────── */}
-                <div
-                    id="video-grid"
-                    style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '24px',
-                        width: '100%',
-                        maxWidth: 'var(--container-max)',
-                        justifyContent: 'center',
-                    }}
-                >
-                    {/* Local tile */}
-                    <VideoTile
-                        stream={localStream}
-                        isLocal
-                        isScreenSharing={isScreenSharing}
-                        label={user?.name || 'You'}
-                        isActive={!hasStarted}
-                        chip={hasStarted ? 'HD' : null}
-                        isMuted={!micEnabled}
-                        isCamOff={!camEnabled && !isScreenSharing}
-                    />
+                {(() => {
+                    const totalParticipants = 1 + streamsMap.length; // local + remotes
+                    // Pick column count based on number of participants
+                    // 1 → 1col, 2 → 2col, 3-4 → 2col, 5-6 → 3col, 7+ → 3-4col
+                    let cols = 1;
+                    if (totalParticipants === 2) cols = 2;
+                    else if (totalParticipants <= 4) cols = 2;
+                    else if (totalParticipants <= 9) cols = 3;
+                    else cols = 4;
 
-                    {/* Remote tiles */}
-                    {streamsMap.map(([peerId, stream], idx) => (
-                        <VideoTile
-                            key={peerId}
-                            stream={stream}
-                            label={`Peer ${peerId.substring(0, 5)}`}
-                            isActive={activePeerId === peerId}
-                            isMuted={idx % 3 === 2}
-                            chip={idx === 0 ? 'REC' : null}
-                        />
-                    ))}
+                    return (
+                        <div
+                            id="video-grid"
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                                gap: '16px',
+                                width: '100%',
+                                maxWidth: 'var(--container-max)',
+                                // Each row preserves 16:9 aspect ratio per tile
+                                gridAutoRows: `calc((100vw - 80px - ${(cols - 1) * 16}px - 48px) / ${cols} * (9/16))`,
+                            }}
+                        >
+                            {/* Local tile */}
+                            <VideoTile
+                                stream={localStream}
+                                isLocal
+                                isScreenSharing={isScreenSharing}
+                                label={user?.name || 'You'}
+                                isActive={false}
+                                chip={hasStarted ? 'HD' : null}
+                                isMuted={!micEnabled}
+                                isCamOff={!camEnabled && !isScreenSharing}
+                            />
 
-                    {/* Waiting placeholder */}
-                    {hasStarted && streamsMap.length === 0 && (
-                        <div style={{
-                            flex: 1, minWidth: '260px', aspectRatio: '16/9',
-                            background: 'var(--primary-container)',
-                            border: '1px solid var(--primary)',
-                            display: 'flex', flexDirection: 'column',
-                            alignItems: 'center', justifyContent: 'center', gap: '16px',
-                        }}>
-                            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--on-primary-container)' }}>person_add</span>
-                            <p className="type-label-sm" style={{ color: 'var(--on-primary-container)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Waiting for peers…
-                            </p>
-                            <button
-                                onClick={copyInviteLink}
-                                className="type-label-sm"
-                                style={{
-                                    background: 'none', border: '1px solid var(--on-primary-container)',
-                                    color: 'var(--on-primary-container)', cursor: 'pointer',
-                                    padding: '8px 16px', textTransform: 'uppercase', letterSpacing: '0.05em',
-                                }}
-                            >
-                                {linkCopied ? '✓ Copied' : 'Copy Invite Link'}
-                            </button>
+                            {/* Remote tiles */}
+                            {streamsMap.map(([peerId, stream], idx) => (
+                                <VideoTile
+                                    key={peerId}
+                                    stream={stream}
+                                    label={`Peer ${peerId.substring(0, 6)}`}
+                                    isActive={activePeerId === peerId}
+                                    isMuted={false}
+                                    chip={idx === 0 ? 'REC' : null}
+                                />
+                            ))}
+
+                            {/* Waiting placeholder — only shown when alone and call started */}
+                            {hasStarted && streamsMap.length === 0 && (
+                                <div style={{
+                                    background: 'var(--primary-container)',
+                                    border: '1px solid var(--primary)',
+                                    display: 'flex', flexDirection: 'column',
+                                    alignItems: 'center', justifyContent: 'center', gap: '16px',
+                                    width: '100%',
+                                    height: '100%',
+                                }}>
+                                    <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--on-primary-container)' }}>person_add</span>
+                                    <p className="type-label-sm" style={{ color: 'var(--on-primary-container)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Waiting for peers…
+                                    </p>
+                                    <button
+                                        onClick={copyInviteLink}
+                                        className="type-label-sm"
+                                        style={{
+                                            background: 'none', border: '1px solid var(--on-primary-container)',
+                                            color: 'var(--on-primary-container)', cursor: 'pointer',
+                                            padding: '8px 16px', textTransform: 'uppercase', letterSpacing: '0.05em',
+                                        }}
+                                    >
+                                        {linkCopied ? '✓ Copied' : 'Copy Invite Link'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
+                    );
+                })()}
 
                 {/* ── Floating Control Bar ──────────────────────────────── */}
                 <div

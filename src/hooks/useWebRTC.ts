@@ -34,6 +34,9 @@ export const useWebRTC = (
   const ws = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);       // stable ref for preview stream cleanup
   const recordingStreamRef = useRef<MediaStream | null>(null);   // stable ref for recording stream cleanup
+  // Ref so createPeerConnection always sees the latest ICE servers without needing them as a dep
+  const iceServersRef = useRef<RTCIceServer[]>(iceServers ?? STUN_FALLBACK);
+  useEffect(() => { iceServersRef.current = iceServers ?? STUN_FALLBACK; }, [iceServers]);
 
   const reconnectAttemptRef = useRef(0);
   const maxReconnectAttempts = 7;
@@ -140,8 +143,8 @@ export const useWebRTC = (
   }, []);
 
   const createPeerConnection = useCallback((peerId: string, stream: MediaStream) => {
-    const resolvedIceServers = iceServers ?? STUN_FALLBACK;
-    const pc = new RTCPeerConnection({ iceServers: resolvedIceServers });
+    // Read latest ICE servers from ref — avoids stale closure & prevents cascade hook invalidation
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
 
     pc.oniceconnectionstatechange = () => {
       console.log(`[WebRTC] ICE state ${peerId}: ${pc.iceConnectionState}`);
@@ -154,15 +157,17 @@ export const useWebRTC = (
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
-      console.log(`[WebRTC] Received remote track from ${peerId}`);
+      console.log(`[WebRTC] ontrack from ${peerId}: kind=${event.track.kind}`);
       setRemoteStreams((prev) => {
-        let newStream = event.streams?.[0];
-        if (!newStream) {
-          newStream = prev[peerId] || new MediaStream();
-          newStream.addTrack(event.track);
-        }
-        // Always create a new MediaStream instance to force React's VideoTile useEffect to update srcObject
-        return { ...prev, [peerId]: new MediaStream(newStream.getTracks()) };
+        // Build on existing tracks for this peer (audio + video arrive in separate events)
+        const existing = prev[peerId];
+        const merged = new MediaStream(existing ? existing.getTracks() : []);
+        // Replace any existing track of the same kind, or add if not present
+        merged.getTracks()
+          .filter(t => t.kind === event.track.kind)
+          .forEach(t => merged.removeTrack(t));
+        merged.addTrack(event.track);
+        return { ...prev, [peerId]: merged };
       });
     };
 
@@ -200,7 +205,7 @@ export const useWebRTC = (
 
     peerConnections.current.set(peerId, pc);
     return pc;
-  }, [iceServers, removePeerConnection]);
+  }, [removePeerConnection]);
 
   const connectWs = useCallback((activeStream: MediaStream) => {
     if (ws.current) {

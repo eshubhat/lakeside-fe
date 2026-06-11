@@ -27,17 +27,9 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--surface)' }}>
+    <div className="home-layout">
       {/* ── Left Sidebar ─────────────────────────────────────────────── */}
-      <aside style={{
-        width: '320px', minWidth: '320px',
-        height: '100vh', position: 'fixed', left: 0, top: 0,
-        background: 'var(--surface)',
-        borderRight: '1px solid var(--border-subtle)',
-        display: 'flex', flexDirection: 'column',
-        padding: '32px 24px', gap: '8px',
-        zIndex: 50,
-      }}>
+      <aside className="home-sidebar">
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
           <div style={{
@@ -102,7 +94,7 @@ const Home: React.FC = () => {
       </aside>
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
-      <main style={{ marginLeft: '320px', flex: 1, minHeight: '100vh', padding: '40px', background: 'var(--surface-gray)' }}>
+      <main className="home-main">
         {/* Header */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '64px' }}>
           <div>
@@ -160,9 +152,9 @@ const Home: React.FC = () => {
         </header>
 
         {/* Bento Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '24px', maxWidth: '1100px' }}>
+        <div className="home-bento-grid">
           {/* Instant Meeting (7/12) */}
-          <div style={{ gridColumn: 'span 7' }}>
+          <div className="home-bento-instant">
             <HoverCard height="400px" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative', overflow: 'hidden' }}>
               <div aria-hidden style={{ position: 'absolute', top: 0, right: 0, padding: '32px', opacity: 0.08, pointerEvents: 'none' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '160px' }}>bolt</span>
@@ -197,7 +189,7 @@ const Home: React.FC = () => {
           </div>
 
           {/* Join / Schedule (5/12) */}
-          <div style={{ gridColumn: 'span 5' }}>
+          <div className="home-bento-join">
             <HoverCard height="400px" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <div style={{
@@ -269,7 +261,7 @@ const Home: React.FC = () => {
           </div> */}
 
           {/* Feature Banner (8/12) */}
-          <div style={{ gridColumn: 'span 8' }}>
+          <div className="home-bento-feature">
             <div style={{
               background: 'var(--primary)', color: '#fff',
               padding: '32px', border: '1px solid var(--primary)',
